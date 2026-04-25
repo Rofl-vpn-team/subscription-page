@@ -2,6 +2,7 @@
     display: flex;
     flex-grow: 1;
     min-height: 100vh;
+    padding-bottom: 24px;
 }
 
 .content {
@@ -11,7 +12,7 @@
 }
 
 .main {
-    max-width: 800px;
+    max-width: 1200px;
     width: 100%;
     align-self: center;
 }

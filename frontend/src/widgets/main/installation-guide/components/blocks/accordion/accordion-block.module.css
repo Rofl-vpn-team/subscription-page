@@ -1,11 +1,12 @@
 .accordionItem {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--app-surface-secondary);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-field-radius);
 }
 
 .accordionItem[data-active] {
-    background: rgba(255, 255, 255, 0.03);
-    border-color: rgba(34, 211, 238, 0.3);
+    background: var(--app-surface-hover);
+    border-color: var(--app-border-strong);
 }
 
 .accordionControl {
@@ -14,7 +15,7 @@
 }
 
 .accordionControl:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--app-glass-highlight);
     border-radius: var(--mantine-radius-lg);
 }
 
