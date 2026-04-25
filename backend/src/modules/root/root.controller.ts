@@ -29,6 +29,51 @@ export class RootController {
         return await this.subpageConfigService.getSubscriptionPageConfig(user.su, request);
     }
 
+    @Get('mihomo/:mainShortUuid')
+    async mihomo(
+        @ClientIp() clientIp: string,
+        @Req() request: Request,
+        @Res() response: Response,
+        @Param('mainShortUuid') mainShortUuid: string,
+    ) {
+        return await this.rootService.serveAggregatedMihomoConfig(
+            clientIp,
+            request,
+            response,
+            mainShortUuid,
+        );
+    }
+
+    @Get('provider/main/:mainShortUuid')
+    async mainMihomoProvider(
+        @ClientIp() clientIp: string,
+        @Req() request: Request,
+        @Res() response: Response,
+        @Param('mainShortUuid') mainShortUuid: string,
+    ) {
+        return await this.rootService.serveMainMihomoProvider(
+            clientIp,
+            request,
+            response,
+            mainShortUuid,
+        );
+    }
+
+    @Get('provider/fallback/:mainShortUuid')
+    async fallbackMihomoProvider(
+        @ClientIp() clientIp: string,
+        @Req() request: Request,
+        @Res() response: Response,
+        @Param('mainShortUuid') mainShortUuid: string,
+    ) {
+        return await this.rootService.serveFallbackMihomoProvider(
+            clientIp,
+            request,
+            response,
+            mainShortUuid,
+        );
+    }
+
     @Get([':shortUuid', ':shortUuid/:clientType'])
     async root(
         @ClientIp() clientIp: string,

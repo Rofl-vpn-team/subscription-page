@@ -3,6 +3,7 @@ import { AxiosResponseHeaders } from 'axios';
 import { Request, Response } from 'express';
 import { createHash } from 'node:crypto';
 import { nanoid } from 'nanoid';
+import { dump } from 'js-yaml';
 
 import { ConfigService } from '@nestjs/config';
 import { Injectable } from '@nestjs/common';
@@ -16,6 +17,21 @@ import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
 import { SubpageConfigService } from './subpage-config.service';
+
+const MIHOMO_CLIENT_TYPE = 'mihomo' as const satisfies TRequestTemplateTypeKeys;
+
+interface RemnawaveDescriptionMetadata {
+    role: string;
+    mainUuid?: string;
+    mainShortUuid?: string;
+    fallbackUuid?: string;
+    fallbackShortUuid?: string;
+}
+
+interface FallbackLookupResult {
+    isMainFound: boolean;
+    fallbackShortUuid: string | null;
+}
 
 @Injectable()
 export class RootService {
@@ -43,6 +59,79 @@ export class RootService {
             this.marzbanSecretKeys = marzbanSecretKeys.split(',').map((key) => key.trim());
         } else {
             this.marzbanSecretKeys = [];
+        }
+    }
+
+    public async serveAggregatedMihomoConfig(
+        clientIp: string,
+        req: Request,
+        res: Response,
+        mainShortUuid: string,
+    ): Promise<void> {
+        try {
+            const fallbackLookupResult = await this.getFallbackLookupResult(
+                clientIp,
+                mainShortUuid,
+            );
+
+            if (!fallbackLookupResult.isMainFound) {
+                res.status(404).send('Not Found');
+                return;
+            }
+
+            const publicBaseUrl = this.getPublicBaseUrl(req);
+            const encodedMainShortUuid = encodeURIComponent(mainShortUuid);
+            const mihomoConfig = this.buildAggregatedMihomoConfig(
+                publicBaseUrl,
+                encodedMainShortUuid,
+                fallbackLookupResult.fallbackShortUuid !== null,
+            );
+
+            res.setHeader('Content-Type', 'application/yaml; charset=utf-8');
+            res.setHeader(
+                'Cache-Control',
+                'no-cache, no-store, must-revalidate, private, max-age=0',
+            );
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.status(200).send(mihomoConfig);
+        } catch (error) {
+            this.logger.error('Error in serveAggregatedMihomoConfig', error);
+
+            res.socket?.destroy();
+            return;
+        }
+    }
+
+    public async serveMainMihomoProvider(
+        clientIp: string,
+        req: Request,
+        res: Response,
+        mainShortUuid: string,
+    ): Promise<void> {
+        return await this.serveMihomoProvider(clientIp, req, res, mainShortUuid);
+    }
+
+    public async serveFallbackMihomoProvider(
+        clientIp: string,
+        req: Request,
+        res: Response,
+        mainShortUuid: string,
+    ): Promise<void> {
+        try {
+            const fallbackShortUuid = await this.getFallbackShortUuid(clientIp, mainShortUuid);
+
+            if (!fallbackShortUuid) {
+                res.status(404).send('Not Found');
+                return;
+            }
+
+            return await this.serveMihomoProvider(clientIp, req, res, fallbackShortUuid);
+        } catch (error) {
+            this.logger.error('Error in serveFallbackMihomoProvider', error);
+
+            res.socket?.destroy();
+            return;
         }
     }
 
@@ -118,13 +207,7 @@ export class RootService {
                 return;
             }
 
-            if (subscriptionDataResponse.headers) {
-                Object.entries(subscriptionDataResponse.headers)
-                    .filter(([key]) => !IGNORED_HEADERS.has(key.toLowerCase()))
-                    .forEach(([key, value]) => {
-                        res.setHeader(key, value);
-                    });
-            }
+            this.setProxyHeaders(res, subscriptionDataResponse.headers);
 
             res.status(200).send(subscriptionDataResponse.response);
         } catch (error) {
@@ -133,6 +216,235 @@ export class RootService {
             res.socket?.destroy();
             return;
         }
+    }
+
+    private async serveMihomoProvider(
+        clientIp: string,
+        req: Request,
+        res: Response,
+        shortUuid: string,
+    ): Promise<void> {
+        try {
+            const subscriptionDataResponse = await this.axiosService.getSubscription(
+                clientIp,
+                shortUuid,
+                req.headers,
+                true,
+                MIHOMO_CLIENT_TYPE,
+            );
+
+            if (!subscriptionDataResponse) {
+                res.status(404).send('Not Found');
+                return;
+            }
+
+            this.setProxyHeaders(res, subscriptionDataResponse.headers);
+            res.status(200).send(subscriptionDataResponse.response);
+        } catch (error) {
+            this.logger.error('Error in serveMihomoProvider', error);
+
+            res.socket?.destroy();
+            return;
+        }
+    }
+
+    private async getFallbackShortUuid(
+        clientIp: string,
+        mainShortUuid: string,
+    ): Promise<string | null> {
+        const fallbackLookupResult = await this.getFallbackLookupResult(clientIp, mainShortUuid);
+
+        return fallbackLookupResult.fallbackShortUuid;
+    }
+
+    private async getFallbackLookupResult(
+        clientIp: string,
+        mainShortUuid: string,
+    ): Promise<FallbackLookupResult> {
+        const mainUserResponse = await this.axiosService.getUserByShortUuid(
+            clientIp,
+            mainShortUuid,
+        );
+
+        if (!mainUserResponse.isOk || !mainUserResponse.response) {
+            this.logger.warn(`Main Remnawave user ${mainShortUuid} not found.`);
+            return {
+                isMainFound: false,
+                fallbackShortUuid: null,
+            };
+        }
+
+        const fallbackShortUuid = this.parseFallbackShortUuid(
+            mainShortUuid,
+            mainUserResponse.response.description,
+        );
+
+        if (!fallbackShortUuid) {
+            return {
+                isMainFound: true,
+                fallbackShortUuid: null,
+            };
+        }
+
+        const fallbackUserResponse = await this.axiosService.getUserByShortUuid(
+            clientIp,
+            fallbackShortUuid,
+        );
+
+        if (!fallbackUserResponse.isOk || !fallbackUserResponse.response) {
+            this.logger.warn(
+                `Fallback Remnawave user ${fallbackShortUuid} for main ${mainShortUuid} not found.`,
+            );
+            return {
+                isMainFound: true,
+                fallbackShortUuid: null,
+            };
+        }
+
+        return {
+            isMainFound: true,
+            fallbackShortUuid,
+        };
+    }
+
+    private parseFallbackShortUuid(
+        mainShortUuid: string,
+        description: string | null,
+    ): string | null {
+        if (!description) {
+            this.logger.debug(`Main Remnawave user ${mainShortUuid} has empty description.`);
+            return null;
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(description);
+        } catch (error) {
+            this.logger.warn(
+                `Main Remnawave user ${mainShortUuid} has invalid description JSON: ${error}`,
+            );
+            return null;
+        }
+
+        if (!this.isMainMetadataWithFallback(parsed)) {
+            this.logger.debug(
+                `Main Remnawave user ${mainShortUuid} description has no fallbackShortUuid.`,
+            );
+            return null;
+        }
+
+        return parsed.fallbackShortUuid;
+    }
+
+    private isMainMetadataWithFallback(
+        value: unknown,
+    ): value is { fallbackShortUuid: string } & RemnawaveDescriptionMetadata {
+        if (typeof value !== 'object' || value === null) {
+            return false;
+        }
+
+        const metadata = value as Partial<RemnawaveDescriptionMetadata>;
+
+        return (
+            metadata.role === 'main' &&
+            typeof metadata.fallbackShortUuid === 'string' &&
+            metadata.fallbackShortUuid.length > 0
+        );
+    }
+
+    private buildAggregatedMihomoConfig(
+        publicBaseUrl: string,
+        encodedMainShortUuid: string,
+        includeFallbackProvider: boolean,
+    ): string {
+        const mainProviderUrl = `${publicBaseUrl}/provider/main/${encodedMainShortUuid}`;
+        const fallbackProviderUrl = `${publicBaseUrl}/provider/fallback/${encodedMainShortUuid}`;
+        const healthCheckUrl = 'http://www.gstatic.com/generate_204';
+        const providerNames = ['main'];
+        const proxyProviders: Record<string, unknown> = {
+            main: {
+                type: 'http',
+                url: mainProviderUrl,
+                path: './providers/main.yaml',
+                interval: 3_600,
+                'health-check': {
+                    enable: true,
+                    url: healthCheckUrl,
+                    interval: 300,
+                },
+            },
+        };
+
+        if (includeFallbackProvider) {
+            providerNames.push('fallback');
+            proxyProviders.fallback = {
+                type: 'http',
+                url: fallbackProviderUrl,
+                path: './providers/fallback.yaml',
+                interval: 3_600,
+                'health-check': {
+                    enable: true,
+                    url: healthCheckUrl,
+                    interval: 300,
+                },
+            };
+        }
+
+        return dump(
+            {
+                'mixed-port': 7890,
+                'allow-lan': false,
+                mode: 'rule',
+                'log-level': 'info',
+                'unified-delay': true,
+                'tcp-concurrent': true,
+                'find-process-mode': 'strict',
+                'proxy-providers': proxyProviders,
+                'proxy-groups': [
+                    {
+                        name: 'PROXY',
+                        type: 'fallback',
+                        use: providerNames,
+                        url: healthCheckUrl,
+                        interval: 300,
+                    },
+                ],
+                rules: ['MATCH,PROXY'],
+            },
+            {
+                lineWidth: -1,
+                noRefs: true,
+            },
+        );
+    }
+
+    private getPublicBaseUrl(req: Request): string {
+        const configuredBaseUrl = this.configService.get<string | undefined>(
+            'SUBSCRIPTION_PUBLIC_BASE_URL',
+        );
+
+        if (configuredBaseUrl) {
+            return configuredBaseUrl.replace(/\/+$/, '');
+        }
+
+        const forwardedProtoHeader = req.headers['x-forwarded-proto'];
+        const forwardedProto = Array.isArray(forwardedProtoHeader)
+            ? forwardedProtoHeader[0]
+            : forwardedProtoHeader;
+        const protocol = forwardedProto?.split(',')[0]?.trim() || req.protocol;
+
+        return `${protocol}://${req.get('host')}`.replace(/\/+$/, '');
+    }
+
+    private setProxyHeaders(
+        res: Response,
+        headers: RawAxiosResponseHeaders | AxiosResponseHeaders,
+    ): void {
+        Object.entries(headers)
+            .filter(([key]) => !IGNORED_HEADERS.has(key.toLowerCase()))
+            .forEach(([key, value]) => {
+                res.setHeader(key, value);
+            });
     }
 
     private generateJwtForCookie(uuid: string | null): string {
