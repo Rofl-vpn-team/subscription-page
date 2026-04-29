@@ -2,8 +2,8 @@ import { RawAxiosResponseHeaders } from 'axios';
 import { AxiosResponseHeaders } from 'axios';
 import { Request, Response } from 'express';
 import { createHash } from 'node:crypto';
+import { dump, load } from 'js-yaml';
 import { nanoid } from 'nanoid';
-import { dump } from 'js-yaml';
 
 import { ConfigService } from '@nestjs/config';
 import { Injectable } from '@nestjs/common';
@@ -33,6 +33,13 @@ interface FallbackLookupResult {
     fallbackShortUuid: string | null;
 }
 
+type MihomoConfig = Record<string, unknown>;
+
+interface MihomoProxyGroup extends MihomoConfig {
+    name: string;
+    type: string;
+}
+
 @Injectable()
 export class RootService {
     private readonly logger = new Logger(RootService.name);
@@ -40,6 +47,7 @@ export class RootService {
     private readonly isMarzbanLegacyLinkEnabled: boolean;
     private readonly marzbanSecretKeys: string[];
     private readonly mlDropRevokedSubscriptions: boolean;
+    private readonly mihomoVpnGroupName: string;
     constructor(
         private readonly configService: ConfigService,
         private readonly jwtService: JwtService,
@@ -52,6 +60,8 @@ export class RootService {
         this.mlDropRevokedSubscriptions = this.configService.getOrThrow<boolean>(
             'MARZBAN_LEGACY_DROP_REVOKED_SUBSCRIPTIONS',
         );
+        this.mihomoVpnGroupName =
+            this.configService.get<string | undefined>('MIHOMO_VPN_GROUP_NAME') || '🛡️ VPN';
 
         const marzbanSecretKeys = this.configService.get<string>('MARZBAN_LEGACY_SECRET_KEY');
 
@@ -69,22 +79,42 @@ export class RootService {
         mainShortUuid: string,
     ): Promise<void> {
         try {
+            const mainConfigResponse = await this.axiosService.getSubscription(
+                clientIp,
+                mainShortUuid,
+                req.headers,
+                true,
+                MIHOMO_CLIENT_TYPE,
+            );
+
+            if (!mainConfigResponse) {
+                res.status(404).send('Not Found');
+                return;
+            }
+
             const fallbackLookupResult = await this.getFallbackLookupResult(
                 clientIp,
                 mainShortUuid,
             );
 
             if (!fallbackLookupResult.isMainFound) {
-                res.status(404).send('Not Found');
+                this.logger.warn(
+                    `Main Mihomo config exists, but Remnawave user lookup failed for ${mainShortUuid}; returning original main config.`,
+                );
+            }
+
+            if (!fallbackLookupResult.fallbackShortUuid) {
+                this.setProxyHeaders(res, mainConfigResponse.headers);
+                res.status(200).send(mainConfigResponse.response);
                 return;
             }
 
             const publicBaseUrl = this.getPublicBaseUrl(req);
             const encodedMainShortUuid = encodeURIComponent(mainShortUuid);
             const mihomoConfig = this.buildAggregatedMihomoConfig(
+                mainConfigResponse.response,
                 publicBaseUrl,
                 encodedMainShortUuid,
-                fallbackLookupResult.fallbackShortUuid !== null,
             );
 
             res.setHeader('Content-Type', 'application/yaml; charset=utf-8');
@@ -353,69 +383,127 @@ export class RootService {
     }
 
     private buildAggregatedMihomoConfig(
+        mainConfigResponse: unknown,
         publicBaseUrl: string,
         encodedMainShortUuid: string,
-        includeFallbackProvider: boolean,
     ): string {
+        const mihomoConfig = this.parseMihomoConfig(mainConfigResponse);
         const mainProviderUrl = `${publicBaseUrl}/provider/main/${encodedMainShortUuid}`;
         const fallbackProviderUrl = `${publicBaseUrl}/provider/fallback/${encodedMainShortUuid}`;
-        const healthCheckUrl = 'http://www.gstatic.com/generate_204';
-        const providerNames = ['main'];
-        const proxyProviders: Record<string, unknown> = {
-            main: {
+        const healthCheckUrl = 'https://www.gstatic.com/generate_204';
+        const mainAutoGroupName = '⚡️ Авто Main';
+        const fallbackAutoGroupName = '⚡️ Авто Fallback';
+
+        mihomoConfig['proxy-providers'] = {
+            ...(this.isPlainObject(mihomoConfig['proxy-providers'])
+                ? mihomoConfig['proxy-providers']
+                : {}),
+            'main-provider': {
                 type: 'http',
                 url: mainProviderUrl,
-                path: './providers/main.yaml',
                 interval: 3_600,
                 'health-check': {
                     enable: true,
                     url: healthCheckUrl,
                     interval: 300,
+                    timeout: 5_000,
+                    lazy: true,
+                },
+            },
+            'fallback-provider': {
+                type: 'http',
+                url: fallbackProviderUrl,
+                interval: 3_600,
+                'health-check': {
+                    enable: true,
+                    url: healthCheckUrl,
+                    interval: 300,
+                    timeout: 5_000,
+                    lazy: true,
                 },
             },
         };
 
-        if (includeFallbackProvider) {
-            providerNames.push('fallback');
-            proxyProviders.fallback = {
-                type: 'http',
-                url: fallbackProviderUrl,
-                path: './providers/fallback.yaml',
-                interval: 3_600,
-                'health-check': {
-                    enable: true,
-                    url: healthCheckUrl,
-                    interval: 300,
-                },
-            };
+        const proxyGroups = this.getProxyGroups(mihomoConfig);
+
+        this.upsertProxyGroup(proxyGroups, {
+            name: mainAutoGroupName,
+            type: 'url-test',
+            use: ['main-provider'],
+            url: healthCheckUrl,
+            interval: 300,
+            tolerance: 150,
+            lazy: true,
+            hidden: true,
+        });
+
+        this.upsertProxyGroup(proxyGroups, {
+            name: fallbackAutoGroupName,
+            type: 'url-test',
+            use: ['fallback-provider'],
+            url: healthCheckUrl,
+            interval: 300,
+            tolerance: 150,
+            lazy: true,
+            hidden: true,
+        });
+
+        this.upsertProxyGroup(proxyGroups, {
+            name: this.mihomoVpnGroupName,
+            type: 'fallback',
+            proxies: [mainAutoGroupName, fallbackAutoGroupName],
+            url: healthCheckUrl,
+            interval: 300,
+            lazy: true,
+        });
+
+        mihomoConfig['proxy-groups'] = proxyGroups;
+
+        return dump(mihomoConfig, {
+            lineWidth: -1,
+            noRefs: true,
+        });
+    }
+
+    private parseMihomoConfig(response: unknown): MihomoConfig {
+        const parsedConfig = typeof response === 'string' ? load(response) : response;
+
+        if (!this.isPlainObject(parsedConfig)) {
+            throw new Error('Main Mihomo config is not a YAML object.');
         }
 
-        return dump(
-            {
-                'mixed-port': 7890,
-                'allow-lan': false,
-                mode: 'rule',
-                'log-level': 'info',
-                'unified-delay': true,
-                'tcp-concurrent': true,
-                'find-process-mode': 'strict',
-                'proxy-providers': proxyProviders,
-                'proxy-groups': [
-                    {
-                        name: 'PROXY',
-                        type: 'fallback',
-                        use: providerNames,
-                        url: healthCheckUrl,
-                        interval: 300,
-                    },
-                ],
-                rules: ['MATCH,PROXY'],
-            },
-            {
-                lineWidth: -1,
-                noRefs: true,
-            },
-        );
+        return parsedConfig;
+    }
+
+    private getProxyGroups(config: MihomoConfig): MihomoProxyGroup[] {
+        const proxyGroups = config['proxy-groups'];
+
+        if (!Array.isArray(proxyGroups)) {
+            return [];
+        }
+
+        return proxyGroups.filter((group): group is MihomoProxyGroup => {
+            if (!this.isPlainObject(group)) {
+                return false;
+            }
+
+            return typeof group.name === 'string' && typeof group.type === 'string';
+        });
+    }
+
+    private upsertProxyGroup(proxyGroups: MihomoProxyGroup[], nextGroup: MihomoProxyGroup): void {
+        const existingIndex = proxyGroups.findIndex((group) => group.name === nextGroup.name);
+
+        if (existingIndex === -1) {
+            proxyGroups.push(nextGroup);
+            return;
+        }
+
+        proxyGroups[existingIndex] = nextGroup;
+    }
+
+    private isPlainObject(value: unknown): value is MihomoConfig {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
 
     private getPublicBaseUrl(req: Request): string {

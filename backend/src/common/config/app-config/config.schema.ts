@@ -18,6 +18,7 @@ export const configSchema = z
         SUBPAGE_CONFIG_UUID: z.string().default('00000000-0000-0000-0000-000000000000'),
         CUSTOM_SUB_PREFIX: z.optional(z.string()),
         SUBSCRIPTION_PUBLIC_BASE_URL: z.optional(z.string()),
+        MIHOMO_VPN_GROUP_NAME: z.optional(z.string()),
 
         CADDY_AUTH_API_TOKEN: z.optional(z.string()),
         CLOUDFLARE_ZERO_TRUST_CLIENT_ID: z.optional(z.string()),
