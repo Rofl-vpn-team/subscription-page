@@ -17,6 +17,8 @@ export const configSchema = z
 
         SUBPAGE_CONFIG_UUID: z.string().default('00000000-0000-0000-0000-000000000000'),
         CUSTOM_SUB_PREFIX: z.optional(z.string()),
+        SUBSCRIPTION_PUBLIC_BASE_URL: z.optional(z.string()),
+        MIHOMO_VPN_GROUP_NAME: z.optional(z.string()),
 
         CADDY_AUTH_API_TOKEN: z.optional(z.string()),
         CLOUDFLARE_ZERO_TRUST_CLIENT_ID: z.optional(z.string()),
@@ -44,6 +46,17 @@ export const configSchema = z
                 code: z.ZodIssueCode.custom,
                 message: 'REMNAWAVE_PANEL_URL must start with http:// or https://',
                 path: ['REMNAWAVE_PANEL_URL'],
+            });
+        }
+        if (
+            data.SUBSCRIPTION_PUBLIC_BASE_URL &&
+            !data.SUBSCRIPTION_PUBLIC_BASE_URL.startsWith('http://') &&
+            !data.SUBSCRIPTION_PUBLIC_BASE_URL.startsWith('https://')
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'SUBSCRIPTION_PUBLIC_BASE_URL must start with http:// or https://',
+                path: ['SUBSCRIPTION_PUBLIC_BASE_URL'],
             });
         }
         if (data.MARZBAN_LEGACY_LINK_ENABLED === true) {

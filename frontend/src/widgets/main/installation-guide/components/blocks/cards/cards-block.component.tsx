@@ -4,7 +4,6 @@ import { getColorGradient, getLocalizedText } from '@shared/utils/config-parser'
 import { ThemeIconShared } from '@shared/ui'
 
 import { IBlockRendererProps } from '../renderer-block.interface'
-import classes from './cards-block.module.css'
 
 export const CardsBlockRenderer = ({
     blocks,
@@ -20,7 +19,6 @@ export const CardsBlockRenderer = ({
 
                 return (
                     <Card
-                        className={classes.root}
                         key={index}
                         p={{ base: 'sm', xs: 'md', sm: 'lg' }}
                         radius="lg"
@@ -35,7 +33,6 @@ export const CardsBlockRenderer = ({
                             />
                             <Stack gap={isMobile ? 'xs' : 'sm'} style={{ flex: 1, minWidth: 0 }}>
                                 <Title
-                                    c="white"
                                     fw={600}
                                     order={6}
                                     style={{ wordBreak: 'break-word' }}

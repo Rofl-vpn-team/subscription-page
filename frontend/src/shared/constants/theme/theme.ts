@@ -6,7 +6,7 @@ export const theme = createTheme({
     components,
     cursorType: 'pointer',
     fontFamily:
-        'Montserrat, Vazirmatn, Apple Color Emoji, Noto Sans SC, Twemoji Country Flags, sans-serif',
+        'Inter, Vazirmatn, Apple Color Emoji, Noto Sans SC, Twemoji Country Flags, sans-serif',
     fontFamilyMonospace: 'Fira Mono, monospace',
     breakpoints: {
         xs: '25em',
@@ -21,20 +21,44 @@ export const theme = createTheme({
     scale: 1,
     fontSmoothing: true,
     focusRing: 'never',
-    white: '#ffffff',
-    black: '#24292f',
+    white: '#fcfcfd',
+    black: '#171420',
     colors: {
         dark: [
-            '#c9d1d9',
-            '#b1bac4',
-            '#8b949e',
-            '#6e7681',
-            '#484f58',
-            '#30363d',
-            '#21262d',
-            '#161b22',
-            '#0d1117',
-            '#010409'
+            '#fcfcfd',
+            '#efedf7',
+            '#bbb7ce',
+            '#8d879e',
+            '#625b75',
+            '#433d57',
+            '#332d45',
+            '#282337',
+            '#171420',
+            '#100e18'
+        ],
+        violet: [
+            '#f2eeff',
+            '#e0d7ff',
+            '#c2b0ff',
+            '#9f82ff',
+            '#7047eb',
+            '#603bd6',
+            '#4f31b5',
+            '#412895',
+            '#332174',
+            '#251852'
+        ],
+        cyan: [
+            '#e3fbff',
+            '#c2f5ff',
+            '#87e9f9',
+            '#4fd9ef',
+            '#22cfe5',
+            '#12abc2',
+            '#0d899c',
+            '#0e6d7d',
+            '#115766',
+            '#0d3c47'
         ],
 
         blue: [
@@ -86,12 +110,17 @@ export const theme = createTheme({
             '#471700'
         ]
     },
-    primaryShade: 8,
-    primaryColor: 'cyan',
+    primaryShade: 4,
+    primaryColor: 'violet',
     autoContrast: true,
     luminanceThreshold: 0.3,
+    defaultGradient: {
+        from: 'violet.4',
+        to: 'cyan.4',
+        deg: 135
+    },
     headings: {
-        fontFamily: 'Unbounded, Vazirmatn, Apple Color Emoji, Noto Sans SC, sans-serif',
+        fontFamily: 'Inter, Vazirmatn, Apple Color Emoji, Noto Sans SC, sans-serif',
         fontWeight: '600'
     },
     defaultRadius: 'md'

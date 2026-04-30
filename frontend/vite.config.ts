@@ -1,17 +1,51 @@
 // import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 // import { visualizer } from 'rollup-plugin-visualizer'
 // import deadFile from 'vite-plugin-deadfile'
+import { createReadStream, existsSync } from 'node:fs'
 import removeConsole from 'vite-plugin-remove-console'
 import webfontDownload from 'vite-plugin-webfont-dl'
+import { defineConfig, type Plugin } from 'vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { ViteEjsPlugin } from 'vite-plugin-ejs'
 import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react-swc'
-import { defineConfig } from 'vite'
+import path from 'node:path'
 import 'dotenv/config'
+
+/**
+ * In production, `.app-config-v2.json` is generated (often gitignored). Local dev only has
+ * `public/assets/app-config.json`, so the fetch would miss static files and the SPA would
+ * return `index.html` (invalid JSON). Map the v2 URL to the sample config in dev.
+ */
+function devAppConfigV2FromSample(): Plugin {
+    return {
+        name: 'dev-app-config-v2-from-sample',
+        apply: 'serve',
+        enforce: 'pre',
+        configureServer(server) {
+            server.middlewares.use((req, res, next) => {
+                const pathname = (req.url ?? '').split('?')[0] ?? ''
+                if (pathname !== '/assets/.app-config-v2.json') {
+                    next()
+                    return
+                }
+                const source = path.join(server.config.publicDir, 'assets', 'app-config.json')
+                if (!existsSync(source)) {
+                    next()
+                    return
+                }
+                res.setHeader('Content-Type', 'application/json; charset=utf-8')
+                createReadStream(source)
+                    .on('error', next)
+                    .pipe(res)
+            })
+        }
+    }
+}
 
 export default defineConfig({
     plugins: [
+        devAppConfigV2FromSample(),
         react(),
         tsconfigPaths(),
         removeConsole(),
@@ -76,7 +110,7 @@ export default defineConfig({
     build: {
         target: 'esNext',
 
-        outDir: 'dist',
+        outDir: '../backend/dev_frontend',
         rollupOptions: {
             output: {
                 manualChunks: {

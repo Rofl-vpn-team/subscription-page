@@ -7,7 +7,7 @@ export default {
             withArrow: true,
             transitionProps: { transition: 'scale-x', duration: 300 },
             arrowSize: 2,
-            color: 'gray'
+            color: 'dark'
         }
     })
 }

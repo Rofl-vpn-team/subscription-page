@@ -73,7 +73,6 @@ export const SubscriptionInfoExpandedWidget = ({ isMobile }: IProps) => {
                             radius="xl"
                             size={isMobile ? 36 : 44}
                             style={{
-                                background: gradientColor.background,
                                 border: gradientColor.border,
                                 boxShadow: gradientColor.boxShadow,
                                 flexShrink: 0
@@ -85,7 +84,6 @@ export const SubscriptionInfoExpandedWidget = ({ isMobile }: IProps) => {
 
                         <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
                             <Title
-                                c="white"
                                 fw={600}
                                 order={5}
                                 style={{

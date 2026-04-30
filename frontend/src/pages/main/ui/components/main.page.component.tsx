@@ -7,9 +7,6 @@ import {
     InstallationGuideConnector,
     MinimalBlockRenderer,
     RawKeysWidget,
-    SubscriptionInfoCardsWidget,
-    SubscriptionInfoCollapsedWidget,
-    SubscriptionInfoExpandedWidget,
     SubscriptionLinkWidget,
     TimelineBlockRenderer
 } from '@widgets/main'
@@ -29,12 +26,12 @@ const BLOCK_RENDERERS = {
     minimal: MinimalBlockRenderer
 } as const
 
-const SUBSCRIPTION_INFO_BLOCK_RENDERERS = {
-    cards: SubscriptionInfoCardsWidget,
-    collapsed: SubscriptionInfoCollapsedWidget,
-    expanded: SubscriptionInfoExpandedWidget,
-    hidden: null
-} as const
+// const SUBSCRIPTION_INFO_BLOCK_RENDERERS = {
+//     cards: SubscriptionInfoCardsWidget,
+//     collapsed: SubscriptionInfoCollapsedWidget,
+//     expanded: SubscriptionInfoExpandedWidget,
+//     hidden: null
+// } as const
 
 export const MainPageComponent = ({ isMobile, platform }: IMainPageComponentProps) => {
     const config = useAppConfig()
@@ -62,8 +59,8 @@ export const MainPageComponent = ({ isMobile, platform }: IMainPageComponentProp
 
     const atLeastOnePlatformApp = Object.values(hasPlatformApps).some((value) => value)
 
-    const SubscriptionInfoBlockRenderer =
-        SUBSCRIPTION_INFO_BLOCK_RENDERERS[config.uiConfig.subscriptionInfoBlockType]
+    // const SubscriptionInfoBlockRenderer =
+    //     SUBSCRIPTION_INFO_BLOCK_RENDERERS[config.uiConfig.subscriptionInfoBlockType]
 
     return (
         <Page>
@@ -83,14 +80,9 @@ export const MainPageComponent = ({ isMobile, platform }: IMainPageComponentProp
                                     }}
                                 />
                             ) : (
-                                <RemnawaveLogo c="cyan" size={32} />
+                                <RemnawaveLogo c="violet" size={32} />
                             )}
-                            <Title
-                                c={hasCustomLogo ? 'white' : 'cyan'}
-                                fw={700}
-                                order={4}
-                                size="lg"
-                            >
+                            <Title c="violet" fw={700} order={4} size="lg">
                                 {brandName}
                             </Title>
                         </Group>
@@ -110,9 +102,9 @@ export const MainPageComponent = ({ isMobile, platform }: IMainPageComponentProp
                 style={{ position: 'relative', zIndex: 1 }}
             >
                 <Stack gap="xl">
-                    {SubscriptionInfoBlockRenderer && (
+                    {/* {SubscriptionInfoBlockRenderer && (
                         <SubscriptionInfoBlockRenderer isMobile={isMobile} />
-                    )}
+                    )} */}
 
                     {atLeastOnePlatformApp && (
                         <InstallationGuideConnector

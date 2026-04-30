@@ -14,17 +14,18 @@
     height: 48px;
     min-width: 0;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-left: 3px solid rgba(255, 255, 255, 0.08);
-    border-radius: var(--mantine-radius-md);
+    background: var(--app-surface-secondary);
+    border: 1px solid var(--app-border);
+    border-left: 3px solid rgb(var(--app-accent-rgb), 0.18);
+    border-radius: var(--app-field-radius);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .appButton:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-left-color: rgba(255, 255, 255, 0.25);
+    background: var(--app-surface-hover);
+    border-color: var(--app-border-strong);
+    border-left-color: rgb(var(--app-accent-rgb), 0.55);
 }
 
 .appButton:hover .bgIcon {
@@ -33,16 +34,16 @@
 
 .appButtonActive,
 .appButtonActive:hover {
-    background: linear-gradient(90deg, rgba(34, 211, 238, 0.12) 0%, rgba(34, 211, 238, 0.04) 100%);
-    border-color: rgba(34, 211, 238, 0.2);
-    border-left-color: var(--mantine-color-cyan-5);
+    background: linear-gradient(90deg, rgb(var(--app-accent-rgb), 0.18) 0%, rgb(var(--app-accent-rgb), 0.06) 100%);
+    border-color: rgb(var(--app-accent-rgb), 0.28);
+    border-left-color: var(--app-accent);
     box-shadow:
-        inset 4px 0 12px -4px rgba(34, 211, 238, 0.3),
-        0 0 12px rgba(34, 211, 238, 0.1);
+        inset 4px 0 12px -4px rgb(var(--app-accent-rgb), 0.42),
+        0 0 18px rgb(var(--app-accent-rgb), 0.16);
 }
 
 .appButtonActive .appName {
-    color: var(--mantine-color-cyan-3);
+    color: var(--app-accent);
 }
 
 .appButtonActive .bgIcon,
@@ -83,7 +84,7 @@
 .appName {
     position: relative;
     z-index: 1;
-    color: rgba(255, 255, 255, 0.85);
+    color: var(--app-foreground);
     font-size: var(--mantine-font-size-md);
     font-weight: 600;
     white-space: nowrap;
@@ -101,10 +102,10 @@
     border-radius: 50%;
     background: #efbf04;
 
-    box-shadow: 0 0 6px rgba(239, 191, 4, 0.6);
+    box-shadow: 0 0 6px rgb(239, 191, 4, 0.6);
 }
 
 .appButtonActive .featuredBadge {
     opacity: 0.8;
-    box-shadow: 0 0 8px rgba(239, 191, 4, 0.4);
+    box-shadow: 0 0 8px rgb(239, 191, 4, 0.4);
 }

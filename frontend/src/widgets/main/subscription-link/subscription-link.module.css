@@ -1,8 +1,9 @@
 .modalContent {
-    background: rgba(22, 27, 35, 0.95);
+    background: var(--app-overlay);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-card-radius);
 }
 
 .modalHeader {
@@ -11,10 +12,11 @@
 
 .modalTitle {
     font-weight: 600;
-    color: white;
+    color: var(--app-foreground);
 }
 
 .actionIcon {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--app-surface-secondary);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-field-radius);
 }

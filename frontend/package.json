@@ -16,6 +16,7 @@
   "scripts": {
     "start:dev": "vite",
     "start:build": "NODE_ENV=production tsc && vite build",
+    "build:watch": "NODE_ENV=production vite build --watch",
     "cb": "vite build",
     "start:preview": "vite preview --port 3334",
     "serve": "NODE_ENV=production tsc && vite build && vite preview --port 3334",

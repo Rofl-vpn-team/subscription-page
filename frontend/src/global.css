@@ -1,17 +1,84 @@
+:root,
+.light,
+.default,
+[data-theme='light'],
+[data-theme='default'],
+[data-mantine-color-scheme='light'] {
+    color-scheme: light;
+
+    /* HeroUI-compatible light semantic tokens from tg-client-fe */
+    --accent: oklch(57.74% 0.2091 273.85deg);
+    --accent-foreground: oklch(99.11% 0 0deg);
+    --background: oklch(97.02% 0.01 273.85deg);
+    --border: oklch(90% 0.01 273.85deg);
+    --danger: oklch(65.32% 0.2375 28.14deg);
+    --danger-foreground: oklch(99.11% 0 0deg);
+    --default: oklch(94% 0.01 273.85deg);
+    --default-foreground: oklch(21.03% 0.0059 273.85deg);
+    --field-background: oklch(100% 0.005 273.85deg);
+    --field-foreground: oklch(21.03% 0.01 273.85deg);
+    --field-placeholder: oklch(55.17% 0.02 273.85deg);
+    --focus: oklch(57.74% 0.2091 273.85deg);
+    --foreground: oklch(21.03% 0.01 273.85deg);
+    --muted: oklch(55.17% 0.02 273.85deg);
+    --overlay: oklch(100% 0.003 273.85deg);
+    --overlay-foreground: oklch(21.03% 0.01 273.85deg);
+    --separator: oklch(92% 0.01 273.85deg);
+    --surface: oklch(100% 0.005 273.85deg);
+    --surface-foreground: oklch(21.03% 0.01 273.85deg);
+    --surface-secondary: oklch(95.24% 0.008 273.85deg);
+    --surface-secondary-foreground: oklch(21.03% 0.01 273.85deg);
+    --surface-tertiary: oklch(93.73% 0.008 273.85deg);
+    --surface-tertiary-foreground: oklch(21.03% 0.01 273.85deg);
+    --warning: oklch(78.19% 0.1617 74.73deg);
+    --warning-foreground: oklch(21.03% 0.0059 74.73deg);
+
+    --radius: 0.5rem;
+    --field-radius: 0.75rem;
+
+    --app-accent: var(--accent);
+    --app-accent-rgb: 112, 71, 235;
+    --app-background: var(--background);
+    --app-surface: color-mix(in oklch, var(--surface) 78%, transparent);
+    --app-surface-solid: var(--surface);
+    --app-surface-secondary: color-mix(in oklch, var(--surface-secondary) 66%, transparent);
+    --app-surface-hover: color-mix(in oklch, var(--surface-tertiary) 86%, transparent);
+    --app-overlay: color-mix(in oklch, var(--overlay) 96%, transparent);
+    --app-border: color-mix(in oklch, var(--border) 64%, transparent);
+    --app-border-strong: color-mix(in oklch, var(--accent) 38%, var(--border));
+    --app-foreground: var(--foreground);
+    --app-muted: var(--muted);
+    --app-radius: var(--radius);
+    --app-field-radius: var(--field-radius);
+    --app-card-radius: 0.875rem;
+    --app-cyan: oklch(78% 0.145 215deg);
+    --app-cyan-rgb: 34, 211, 238;
+    --app-glass-highlight: color-mix(in oklch, var(--foreground) 8%, transparent);
+}
+
 html,
 body {
     min-height: 100vh;
-    background-color: #161b23;
-    background-image:
-        linear-gradient(to right, rgba(128, 128, 128, 0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(128, 128, 128, 0.05) 1px, transparent 1px);
-    background-size: 60px 60px;
-    background-attachment: fixed;
+    background-color: var(--app-background);
+    color: var(--app-foreground);
+    font-family:
+        Inter,
+        Vazirmatn,
+        "Apple Color Emoji",
+        "Noto Sans SC",
+        "Twemoji Country Flags",
+        sans-serif;
     position: relative;
 }
 
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 #root {
-    height: 100vh;
+    min-height: 100vh;
 }
 
 .animated-background {
@@ -23,68 +90,72 @@ body {
     pointer-events: none;
     z-index: 0;
     background:
-        radial-gradient(ellipse 60% 40% at 25% 40%, rgba(151, 117, 250, 0.08), transparent 50%),
-        radial-gradient(ellipse 50% 50% at 85% 85%, rgba(34, 211, 238, 0.06), transparent 50%);
+        radial-gradient(ellipse 60% 42% at 18% 26%, rgb(var(--app-accent-rgb), 0.18), transparent 58%),
+        radial-gradient(ellipse 50% 48% at 82% 88%, rgb(var(--app-cyan-rgb), 0.1), transparent 54%);
 }
 
 .header-wrapper {
     position: sticky;
-    top: 0;
+    top: 12px;
     z-index: 100;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    background: rgba(22, 27, 35, 0.8);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    margin: 12px;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    background: color-mix(in oklch, var(--overlay) 78%, transparent);
+    border: 1px solid var(--app-border);
+    border-radius: calc(var(--app-card-radius) + 4px);
+    box-shadow: var(--mantine-shadow-xl);
 
     @media (min-width: 768px) {
-        border-radius: 0 0 var(--mantine-radius-lg) var(--mantine-radius-lg);
+        margin: 16px auto 0;
+        max-width: 1184px;
     }
 }
 
 .logo-text-highlight {
-    color: var(--mantine-color-cyan-4);
+    color: var(--app-accent);
 }
 
 .logo-text-normal {
-    color: white;
+    color: var(--app-foreground);
 }
 
 .info-card-cyan {
-    background: linear-gradient(135deg, rgba(34, 211, 238, 0.1) 0%, rgba(6, 182, 212, 0.05) 100%);
-    border: 1px solid rgba(34, 211, 238, 0.2);
+    background: linear-gradient(135deg, rgb(var(--app-cyan-rgb), 0.1) 0%, rgb(6, 182, 212, 0.05) 100%);
+    border: 1px solid rgb(var(--app-cyan-rgb), 0.2);
 }
 
 .info-card-violet {
-    background: linear-gradient(135deg, rgba(151, 117, 250, 0.1) 0%, rgba(132, 94, 247, 0.05) 100%);
-    border: 1px solid rgba(151, 117, 250, 0.2);
+    background: linear-gradient(135deg, rgb(151, 117, 250, 0.1) 0%, rgb(132, 94, 247, 0.05) 100%);
+    border: 1px solid rgb(151, 117, 250, 0.2);
 }
 
 .info-card-green {
-    background: linear-gradient(135deg, rgba(64, 192, 87, 0.1) 0%, rgba(55, 178, 77, 0.05) 100%);
-    border: 1px solid rgba(64, 192, 87, 0.2);
+    background: linear-gradient(135deg, rgb(64, 192, 87, 0.1) 0%, rgb(55, 178, 77, 0.05) 100%);
+    border: 1px solid rgb(64, 192, 87, 0.2);
 }
 
 .info-card-red {
-    background: linear-gradient(135deg, rgba(250, 82, 82, 0.1) 0%, rgba(224, 49, 49, 0.05) 100%);
-    border: 1px solid rgba(250, 82, 82, 0.2);
+    background: linear-gradient(135deg, rgb(250, 82, 82, 0.1) 0%, rgb(224, 49, 49, 0.05) 100%);
+    border: 1px solid rgb(250, 82, 82, 0.2);
 }
 
 .info-card-yellow {
-    background: linear-gradient(135deg, rgba(250, 176, 5, 0.1) 0%, rgba(245, 159, 0, 0.05) 100%);
-    border: 1px solid rgba(250, 176, 5, 0.2);
+    background: linear-gradient(135deg, rgb(250, 176, 5, 0.1) 0%, rgb(245, 159, 0, 0.05) 100%);
+    border: 1px solid rgb(250, 176, 5, 0.2);
 }
 
 .info-card-blue {
-    background: linear-gradient(135deg, rgba(34, 139, 230, 0.1) 0%, rgba(28, 126, 214, 0.05) 100%);
-    border: 1px solid rgba(34, 139, 230, 0.2);
+    background: linear-gradient(135deg, rgb(34, 139, 230, 0.1) 0%, rgb(28, 126, 214, 0.05) 100%);
+    border: 1px solid rgb(34, 139, 230, 0.2);
 }
 
 .info-card-teal {
-    background: linear-gradient(135deg, rgba(32, 201, 151, 0.1) 0%, rgba(18, 184, 134, 0.05) 100%);
-    border: 1px solid rgba(32, 201, 151, 0.2);
+    background: linear-gradient(135deg, rgb(32, 201, 151, 0.1) 0%, rgb(18, 184, 134, 0.05) 100%);
+    border: 1px solid rgb(32, 201, 151, 0.2);
 }
 
 .info-card-orange {
-    background: linear-gradient(135deg, rgba(253, 126, 20, 0.1) 0%, rgba(247, 103, 7, 0.05) 100%);
-    border: 1px solid rgba(253, 126, 20, 0.2);
+    background: linear-gradient(135deg, rgb(253, 126, 20, 0.1) 0%, rgb(247, 103, 7, 0.05) 100%);
+    border: 1px solid rgb(253, 126, 20, 0.2);
 }
