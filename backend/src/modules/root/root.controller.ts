@@ -87,6 +87,13 @@ export class RootController {
             return;
         }
 
+        this.logger.log(
+            `Serving subscription page for ${shortUuid} with client type ${clientType}`,
+        );
+        this.logger.log(`Client IP: ${clientIp}`);
+        this.logger.log(`Short UUID: ${shortUuid}`);
+        this.logger.log(`Client Type: ${clientType}`);
+
         if (clientType === undefined) {
             return await this.rootService.serveSubscriptionPage(
                 clientIp,

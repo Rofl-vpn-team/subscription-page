@@ -276,7 +276,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "clashmi://install-config?xhwid=true&url={{SUBSCRIPTION_LINK}}",
+                                    "link": "clashmi://install-config?xhwid=true&url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -786,7 +786,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "flclashx://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "flclashx://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -950,7 +950,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "koala-clash://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "koala-clash://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -1114,7 +1114,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "prizrak-box://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "prizrak-box://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -1349,7 +1349,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "flclashx://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "flclashx://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -1489,7 +1489,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "koala-clash://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "koala-clash://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -1642,7 +1642,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "prizrak-box://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "prizrak-box://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -1865,7 +1865,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "flclashx://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "flclashx://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -1986,7 +1986,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "clashmeta://install-config?name={{USERNAME}}&url={{SUBSCRIPTION_LINK}}",
+                                    "link": "clashmeta://install-config?name={{USERNAME}}&url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -2535,7 +2535,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "flclashx://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "flclashx://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -2663,7 +2663,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "koala-clash://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "koala-clash://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",
@@ -2803,7 +2803,7 @@
                             },
                             "buttons": [
                                 {
-                                    "link": "prizrak-box://install-config?url={{SUBSCRIPTION_LINK}}",
+                                    "link": "prizrak-box://install-config?url={{MIHOMO_SUBSCRIPTION_LINK}}",
                                     "type": "subscriptionLink",
                                     "text": {
                                         "en": "Add Subscription",

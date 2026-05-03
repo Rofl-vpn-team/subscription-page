@@ -19,7 +19,10 @@ import { useClipboard } from '@mantine/hooks'
 import { useState } from 'react'
 import clsx from 'clsx'
 
-import { constructSubscriptionUrl } from '@shared/utils/construct-subscription-url'
+import {
+    constructMihomoSubscriptionUrl,
+    constructSubscriptionUrl
+} from '@shared/utils/construct-subscription-url'
 import { useSubscription } from '@entities/subscription-info-store'
 import { getIconFromLibrary } from '@shared/utils/config-parser'
 import { TemplateEngine } from '@shared/utils/template-engine'
@@ -80,12 +83,17 @@ export const InstallationGuideConnector = (props: IProps) => {
         window.location.href,
         subscription.user.shortUuid
     )
+    const mihomoSubscriptionUrl = constructMihomoSubscriptionUrl(
+        window.location.href,
+        subscription.user.shortUuid
+    )
 
     const handleButtonClick = (button: TSubscriptionPageButtonConfig) => {
         let formattedUrl: string | undefined
 
         if (button.type === 'subscriptionLink' || button.type === 'copyButton') {
             formattedUrl = TemplateEngine.formatWithMetaInfo(button.link, {
+                mihomoSubscriptionUrl,
                 username: subscription.user.username,
                 subscriptionUrl
             })
