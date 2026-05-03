@@ -111,10 +111,12 @@ export class RootService {
 
             const publicBaseUrl = this.getPublicBaseUrl(req);
             const encodedMainShortUuid = encodeURIComponent(mainShortUuid);
+            const hwidHeader = this.getHwidHeader(req);
             const mihomoConfig = this.buildAggregatedMihomoConfig(
                 mainConfigResponse.response,
                 publicBaseUrl,
                 encodedMainShortUuid,
+                hwidHeader,
             );
 
             res.setHeader('Content-Type', 'application/yaml; charset=utf-8');
@@ -263,6 +265,7 @@ export class RootService {
                 MIHOMO_CLIENT_TYPE,
             );
 
+            this.logger.log(`Fallback short UUID: ${shortUuid}`);
             if (!subscriptionDataResponse) {
                 res.status(404).send('Not Found');
                 return;
@@ -386,6 +389,7 @@ export class RootService {
         mainConfigResponse: unknown,
         publicBaseUrl: string,
         encodedMainShortUuid: string,
+        hwidHeader: string[] | undefined,
     ): string {
         const mihomoConfig = this.parseMihomoConfig(mainConfigResponse);
         const mainProviderUrl = `${publicBaseUrl}/provider/main/${encodedMainShortUuid}`;
@@ -402,6 +406,7 @@ export class RootService {
                 type: 'http',
                 url: mainProviderUrl,
                 interval: 3_600,
+                ...(hwidHeader ? { header: { 'x-hwid': hwidHeader } } : {}),
                 'health-check': {
                     enable: true,
                     url: healthCheckUrl,
@@ -414,6 +419,7 @@ export class RootService {
                 type: 'http',
                 url: fallbackProviderUrl,
                 interval: 3_600,
+                ...(hwidHeader ? { header: { 'x-hwid': hwidHeader } } : {}),
                 'health-check': {
                     enable: true,
                     url: healthCheckUrl,
@@ -504,6 +510,20 @@ export class RootService {
 
     private isPlainObject(value: unknown): value is MihomoConfig {
         return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+
+    private getHwidHeader(req: Request): string[] | undefined {
+        const header = req.headers['x-hwid'] ?? req.headers['X-HWID'];
+
+        if (!header) {
+            return undefined;
+        }
+
+        if (Array.isArray(header)) {
+            return header;
+        }
+
+        return [header];
     }
 
     private getPublicBaseUrl(req: Request): string {
