@@ -12,7 +12,7 @@ import { useClipboard } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
 import { renderSVG } from 'uqr'
 
-import { constructSubscriptionUrl } from '@shared/utils/construct-subscription-url'
+import { constructMihomoSubscriptionUrl } from '@shared/utils/construct-subscription-url'
 import { useSubscription } from '@entities/subscription-info-store'
 import { vibrate } from '@shared/utils/vibrate'
 import { useTranslation } from '@shared/hooks'
@@ -29,7 +29,12 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
     const subscription = useSubscription()
     const clipboard = useClipboard({ timeout: 10000 })
 
-    const subscriptionUrl = constructSubscriptionUrl(
+    // const subscriptionUrl = constructSubscriptionUrl(
+    //     window.location.href,
+    //     subscription.user.shortUuid
+    // )
+
+    const mihomoSubscriptionUrl = constructMihomoSubscriptionUrl(
         window.location.href,
         subscription.user.shortUuid
     )
@@ -40,7 +45,7 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
             message: t(baseTranslations.linkCopiedToClipboard),
             color: 'violet'
         })
-        clipboard.copy(subscriptionUrl)
+        clipboard.copy(mihomoSubscriptionUrl)
     }
 
     const renderSupportLink = (supportUrl: string) => {
@@ -81,7 +86,7 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
     const handleGetLink = () => {
         vibrate('tap')
 
-        const subscriptionQrCode = renderSVG(subscriptionUrl, {
+        const subscriptionQrCode = renderSVG(mihomoSubscriptionUrl, {
             whiteColor: '#161B22',
             blackColor: '#FAFAFA'
         })
