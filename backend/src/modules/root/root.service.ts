@@ -412,7 +412,7 @@ export class RootService {
                     url: healthCheckUrl,
                     interval: 300,
                     timeout: 5_000,
-                    lazy: true,
+                    lazy: false,
                 },
             },
             'fallback-provider': {
@@ -425,7 +425,7 @@ export class RootService {
                     url: healthCheckUrl,
                     interval: 300,
                     timeout: 5_000,
-                    lazy: true,
+                    lazy: false,
                 },
             },
         };
@@ -439,7 +439,7 @@ export class RootService {
             url: healthCheckUrl,
             interval: 300,
             tolerance: 150,
-            lazy: true,
+            lazy: false,
             hidden: true,
         });
 
@@ -450,7 +450,7 @@ export class RootService {
             url: healthCheckUrl,
             interval: 300,
             tolerance: 150,
-            lazy: true,
+            lazy: false,
             hidden: true,
         });
 
@@ -460,7 +460,7 @@ export class RootService {
             proxies: [mainAutoGroupName, fallbackAutoGroupName],
             url: healthCheckUrl,
             interval: 300,
-            lazy: true,
+            lazy: false,
         });
 
         mihomoConfig['proxy-groups'] = proxyGroups;
