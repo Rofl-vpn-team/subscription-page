@@ -406,9 +406,11 @@ export class RootService {
         const mainProviderUrl = `${publicBaseUrl}/provider/main/${encodedMainShortUuid}`;
         const fallbackProviderUrl = `${publicBaseUrl}/provider/fallback/${encodedMainShortUuid}`;
         const healthCheckUrl = 'https://www.gstatic.com/generate_204';
-        const mainAutoGroupName = '⚡️ Авто Main';
-        const fallbackAutoGroupName = '⚡️ Авто Fallback';
 
+        const countries = this.extractCountryCodes(mihomoConfig);
+        const nonAutoCountries = countries.filter((c) => c !== 'AUTO');
+
+        // 1. Inject proxy-providers
         mihomoConfig['proxy-providers'] = {
             ...(this.isPlainObject(mihomoConfig['proxy-providers'])
                 ? mihomoConfig['proxy-providers']
@@ -443,10 +445,12 @@ export class RootService {
 
         const proxyGroups = this.getProxyGroups(mihomoConfig);
 
+        // 2. Hidden url-test pools (main + whitelist, each with AUTO + per-country)
         this.upsertProxyGroup(proxyGroups, {
-            name: mainAutoGroupName,
+            name: '_main_auto_pool',
             type: 'url-test',
             use: ['main-provider'],
+            filter: '^MAIN-AUTO-',
             url: healthCheckUrl,
             interval: 300,
             timeout: 5_000,
@@ -454,27 +458,80 @@ export class RootService {
             lazy: true,
             hidden: true,
         });
-
         this.upsertProxyGroup(proxyGroups, {
-            name: fallbackAutoGroupName,
+            name: '_wl_auto_pool',
             type: 'url-test',
             use: ['fallback-provider'],
+            filter: '^WL-AUTO-',
             url: healthCheckUrl,
             interval: 300,
             timeout: 5_000,
-            tolerance: 300,
+            tolerance: 150,
             lazy: true,
             hidden: true,
         });
+        for (const cc of nonAutoCountries) {
+            const lowerCc = cc.toLowerCase();
+            this.upsertProxyGroup(proxyGroups, {
+                name: `_main_${lowerCc}_pool`,
+                type: 'url-test',
+                use: ['main-provider'],
+                filter: `^MAIN-${cc}-`,
+                url: healthCheckUrl,
+                interval: 300,
+                timeout: 5_000,
+                tolerance: 150,
+                lazy: true,
+                hidden: true,
+            });
+            this.upsertProxyGroup(proxyGroups, {
+                name: `_wl_${lowerCc}_pool`,
+                type: 'url-test',
+                use: ['fallback-provider'],
+                filter: `^WL-${cc}-`,
+                url: healthCheckUrl,
+                interval: 300,
+                timeout: 5_000,
+                tolerance: 150,
+                lazy: true,
+                hidden: true,
+            });
+        }
 
+        // 3. User-facing country selectors (2-tier fallback: main_<cc> -> wl_<cc>)
+        const autoSelectorName = '⚡️ Авто';
         this.upsertProxyGroup(proxyGroups, {
-            name: this.mihomoVpnGroupName,
+            name: autoSelectorName,
             type: 'fallback',
-            proxies: [mainAutoGroupName, fallbackAutoGroupName],
+            proxies: ['_main_auto_pool', '_wl_auto_pool'],
             url: healthCheckUrl,
             interval: 300,
             timeout: 6_000,
             lazy: true,
+        });
+        const countrySelectorNames: string[] = [];
+        for (const cc of nonAutoCountries) {
+            const lowerCc = cc.toLowerCase();
+            const { emoji, label } = COUNTRY_LABELS[cc] ?? COUNTRY_LABEL_FALLBACK(cc);
+            const selectorName = `${emoji} ${label}`;
+            countrySelectorNames.push(selectorName);
+            this.upsertProxyGroup(proxyGroups, {
+                name: selectorName,
+                type: 'fallback',
+                proxies: [`_main_${lowerCc}_pool`, `_wl_${lowerCc}_pool`],
+                url: healthCheckUrl,
+                interval: 300,
+                timeout: 6_000,
+                lazy: true,
+            });
+        }
+
+        // 4. Top-level VPN selector — `select` with country options
+        this.upsertProxyGroup(proxyGroups, {
+            name: this.mihomoVpnGroupName,
+            type: 'select',
+            proxies: [autoSelectorName, ...countrySelectorNames],
+            url: healthCheckUrl,
         });
 
         mihomoConfig['proxy-groups'] = proxyGroups;
