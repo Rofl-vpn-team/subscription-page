@@ -20,6 +20,17 @@ import { SubpageConfigService } from './subpage-config.service';
 
 const MIHOMO_CLIENT_TYPE = 'mihomo' as const satisfies TRequestTemplateTypeKeys;
 
+const COUNTRY_LABELS: Record<string, { emoji: string; label: string }> = {
+    NL: { emoji: '🇳🇱', label: 'Нидерланды' },
+    DE: { emoji: '🇩🇪', label: 'Германия' },
+    FI: { emoji: '🇫🇮', label: 'Финляндия' },
+    // Add new countries here as exit-nodes appear in inventory.
+};
+
+const COUNTRY_LABEL_FALLBACK = (cc: string) => ({ emoji: '🌐', label: cc });
+
+const MAIN_PROXY_NAME_RE = /^MAIN-(AUTO|[A-Z]{2})-/;
+
 interface RemnawaveDescriptionMetadata {
     role: string;
     mainUuid?: string;
@@ -513,6 +524,25 @@ export class RootService {
 
     private isPlainObject(value: unknown): value is MihomoConfig {
         return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+
+    private extractCountryCodes(mihomoConfig: MihomoConfig): string[] {
+        const proxies = Array.isArray(mihomoConfig['proxies']) ? mihomoConfig['proxies'] : [];
+        const codes = new Set<string>();
+        for (const proxy of proxies) {
+            if (!this.isPlainObject(proxy)) continue;
+            const name = typeof proxy['name'] === 'string' ? proxy['name'] : '';
+            const m = name.match(MAIN_PROXY_NAME_RE);
+            if (!m) continue;
+            codes.add(m[1]); // AUTO or 2-letter code
+        }
+        const sorted = Array.from(codes);
+        sorted.sort((a, b) => {
+            if (a === 'AUTO') return -1;
+            if (b === 'AUTO') return 1;
+            return a.localeCompare(b);
+        });
+        return sorted;
     }
 
     private getHwidHeader(req: Request): string[] | undefined {
