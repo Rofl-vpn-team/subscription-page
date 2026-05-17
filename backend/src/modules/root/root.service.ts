@@ -445,10 +445,12 @@ export class RootService {
 
         const proxyGroups = this.getProxyGroups(mihomoConfig);
 
-        // 2. User-facing country selectors. Each is a fallback group that pulls
-        // proxies directly from both providers via filter regex. Mihomo
-        // preserves provider order in `use:`, so main proxies come first and
-        // wl proxies serve as fallback automatically.
+        // 2. Country selectors. Each is a fallback group that pulls proxies
+        // directly from both providers via filter regex. Mihomo preserves
+        // provider order in `use:`, so main proxies come first and wl proxies
+        // serve as fallback automatically. Marked `hidden: true` so stock
+        // mihomo UIs surface only the top-level VPN group; clients that
+        // ignore the flag (e.g. clashmi) will still list them.
         const autoSelectorName = '⚡️ Авто';
         this.upsertProxyGroup(proxyGroups, {
             name: autoSelectorName,
@@ -459,6 +461,7 @@ export class RootService {
             interval: 300,
             timeout: 6_000,
             lazy: true,
+            hidden: true,
         });
         const countrySelectorNames: string[] = [];
         for (const cc of nonAutoCountries) {
@@ -474,6 +477,7 @@ export class RootService {
                 interval: 300,
                 timeout: 6_000,
                 lazy: true,
+                hidden: true,
             });
         }
 
