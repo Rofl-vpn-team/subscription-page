@@ -91,14 +91,14 @@ export class RootService {
 
             if (!fallbackLookupResult.isMainFound) {
                 this.logger.warn(
-                    `Main Mihomo config exists, but Remnawave user lookup failed for ${mainShortUuid}; returning original main config.`,
+                    `Main Mihomo config exists, but Remnawave user lookup failed for ${mainShortUuid}; aggregating with fallback provider stubbed.`,
                 );
             }
 
             if (!fallbackLookupResult.fallbackShortUuid) {
-                this.setProxyHeaders(res, mainConfigResponse.headers);
-                res.status(200).send(mainConfigResponse.response);
-                return;
+                this.logger.debug(
+                    `No fallbackShortUuid for ${mainShortUuid}; fallback-provider will be injected anyway and serve 404 (mihomo treats it as empty).`,
+                );
             }
 
             const publicBaseUrl = this.getPublicBaseUrl(req);
