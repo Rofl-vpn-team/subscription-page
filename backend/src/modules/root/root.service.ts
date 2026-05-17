@@ -388,6 +388,15 @@ export class RootService {
         const fallbackProviderUrl = `${publicBaseUrl}/provider/fallback/${encodedMainShortUuid}`;
         const healthCheckUrl = 'https://www.gstatic.com/generate_204';
 
+        // Drop the inline proxies list from the aggregated config: clients
+        // pull proxy data from the two HTTP providers below. Keeping inline
+        // entries here only surfaces internal MAIN-*/WL-* host names (and
+        // Remnawave-side `^~2~^` collisions) in the client UI without adding
+        // any functional value. The /provider/* endpoints still serve full
+        // template renderings, so Mihomo's HTTP provider mechanism keeps
+        // refreshing proxies every 3600s.
+        delete mihomoConfig['proxies'];
+
         // Inject proxy-providers. Country selectors, VPN top-level group and
         // any group-level filters are defined in the Remnawave mihomo template
         // (mihomo_subscription.yml.j2). Server only adds the two HTTP
