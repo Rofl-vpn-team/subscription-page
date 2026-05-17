@@ -445,65 +445,16 @@ export class RootService {
 
         const proxyGroups = this.getProxyGroups(mihomoConfig);
 
-        // 2. Hidden url-test pools (main + whitelist, each with AUTO + per-country)
-        this.upsertProxyGroup(proxyGroups, {
-            name: '_main_auto_pool',
-            type: 'url-test',
-            use: ['main-provider'],
-            filter: '^MAIN-AUTO-',
-            url: healthCheckUrl,
-            interval: 300,
-            timeout: 5_000,
-            tolerance: 150,
-            lazy: true,
-            hidden: true,
-        });
-        this.upsertProxyGroup(proxyGroups, {
-            name: '_wl_auto_pool',
-            type: 'url-test',
-            use: ['fallback-provider'],
-            filter: '^WL-AUTO-',
-            url: healthCheckUrl,
-            interval: 300,
-            timeout: 5_000,
-            tolerance: 150,
-            lazy: true,
-            hidden: true,
-        });
-        for (const cc of nonAutoCountries) {
-            const lowerCc = cc.toLowerCase();
-            this.upsertProxyGroup(proxyGroups, {
-                name: `_main_${lowerCc}_pool`,
-                type: 'url-test',
-                use: ['main-provider'],
-                filter: `^MAIN-${cc}-`,
-                url: healthCheckUrl,
-                interval: 300,
-                timeout: 5_000,
-                tolerance: 150,
-                lazy: true,
-                hidden: true,
-            });
-            this.upsertProxyGroup(proxyGroups, {
-                name: `_wl_${lowerCc}_pool`,
-                type: 'url-test',
-                use: ['fallback-provider'],
-                filter: `^WL-${cc}-`,
-                url: healthCheckUrl,
-                interval: 300,
-                timeout: 5_000,
-                tolerance: 150,
-                lazy: true,
-                hidden: true,
-            });
-        }
-
-        // 3. User-facing country selectors (2-tier fallback: main_<cc> -> wl_<cc>)
+        // 2. User-facing country selectors. Each is a fallback group that pulls
+        // proxies directly from both providers via filter regex. Mihomo
+        // preserves provider order in `use:`, so main proxies come first and
+        // wl proxies serve as fallback automatically.
         const autoSelectorName = '⚡️ Авто';
         this.upsertProxyGroup(proxyGroups, {
             name: autoSelectorName,
             type: 'fallback',
-            proxies: ['_main_auto_pool', '_wl_auto_pool'],
+            use: ['main-provider', 'fallback-provider'],
+            filter: '^(MAIN|WL)-AUTO-',
             url: healthCheckUrl,
             interval: 300,
             timeout: 6_000,
@@ -511,14 +462,14 @@ export class RootService {
         });
         const countrySelectorNames: string[] = [];
         for (const cc of nonAutoCountries) {
-            const lowerCc = cc.toLowerCase();
             const { emoji, label } = COUNTRY_LABELS[cc] ?? COUNTRY_LABEL_FALLBACK(cc);
             const selectorName = `${emoji} ${label}`;
             countrySelectorNames.push(selectorName);
             this.upsertProxyGroup(proxyGroups, {
                 name: selectorName,
                 type: 'fallback',
-                proxies: [`_main_${lowerCc}_pool`, `_wl_${lowerCc}_pool`],
+                use: ['main-provider', 'fallback-provider'],
+                filter: `^(MAIN|WL)-${cc}-`,
                 url: healthCheckUrl,
                 interval: 300,
                 timeout: 6_000,
@@ -526,7 +477,7 @@ export class RootService {
             });
         }
 
-        // 4. Top-level VPN selector — `select` with country options
+        // 3. Top-level VPN selector — `select` with country options
         this.upsertProxyGroup(proxyGroups, {
             name: this.mihomoVpnGroupName,
             type: 'select',
