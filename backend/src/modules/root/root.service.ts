@@ -20,17 +20,6 @@ import { SubpageConfigService } from './subpage-config.service';
 
 const MIHOMO_CLIENT_TYPE = 'mihomo' as const satisfies TRequestTemplateTypeKeys;
 
-const COUNTRY_LABELS: Record<string, { emoji: string; label: string }> = {
-    NL: { emoji: '🇳🇱', label: 'Нидерланды' },
-    DE: { emoji: '🇩🇪', label: 'Германия' },
-    FI: { emoji: '🇫🇮', label: 'Финляндия' },
-    // Add new countries here as exit-nodes appear in inventory.
-};
-
-const COUNTRY_LABEL_FALLBACK = (cc: string) => ({ emoji: '🌐', label: cc });
-
-const MAIN_PROXY_NAME_RE = /^MAIN-(AUTO|[A-Z]{2})-/;
-
 interface RemnawaveDescriptionMetadata {
     role: string;
     mainUuid?: string;
@@ -46,11 +35,6 @@ interface FallbackLookupResult {
 
 type MihomoConfig = Record<string, unknown>;
 
-interface MihomoProxyGroup extends MihomoConfig {
-    name: string;
-    type: string;
-}
-
 @Injectable()
 export class RootService {
     private readonly logger = new Logger(RootService.name);
@@ -58,7 +42,6 @@ export class RootService {
     private readonly isMarzbanLegacyLinkEnabled: boolean;
     private readonly marzbanSecretKeys: string[];
     private readonly mlDropRevokedSubscriptions: boolean;
-    private readonly mihomoVpnGroupName: string;
     constructor(
         private readonly configService: ConfigService,
         private readonly jwtService: JwtService,
@@ -71,8 +54,6 @@ export class RootService {
         this.mlDropRevokedSubscriptions = this.configService.getOrThrow<boolean>(
             'MARZBAN_LEGACY_DROP_REVOKED_SUBSCRIPTIONS',
         );
-        this.mihomoVpnGroupName =
-            this.configService.get<string | undefined>('MIHOMO_VPN_GROUP_NAME') || '🛡️ VPN';
 
         const marzbanSecretKeys = this.configService.get<string>('MARZBAN_LEGACY_SECRET_KEY');
 
@@ -407,10 +388,11 @@ export class RootService {
         const fallbackProviderUrl = `${publicBaseUrl}/provider/fallback/${encodedMainShortUuid}`;
         const healthCheckUrl = 'https://www.gstatic.com/generate_204';
 
-        const countries = this.extractCountryCodes(mihomoConfig);
-        const nonAutoCountries = countries.filter((c) => c !== 'AUTO');
-
-        // 1. Inject proxy-providers
+        // Inject proxy-providers. Country selectors, VPN top-level group and
+        // any group-level filters are defined in the Remnawave mihomo template
+        // (mihomo_subscription.yml.j2). Server only adds the two HTTP
+        // providers so groups in the template can resolve `use: [main-provider,
+        // fallback-provider]` references.
         mihomoConfig['proxy-providers'] = {
             ...(this.isPlainObject(mihomoConfig['proxy-providers'])
                 ? mihomoConfig['proxy-providers']
@@ -443,54 +425,6 @@ export class RootService {
             },
         };
 
-        const proxyGroups = this.getProxyGroups(mihomoConfig);
-
-        // 2. Country selectors. Each is a fallback group that pulls proxies
-        // directly from both providers via filter regex. Mihomo preserves
-        // provider order in `use:`, so main proxies come first and wl proxies
-        // serve as fallback automatically. Marked `hidden: true` so stock
-        // mihomo UIs surface only the top-level VPN group; clients that
-        // ignore the flag (e.g. clashmi) will still list them.
-        const autoSelectorName = '⚡️ Авто';
-        this.upsertProxyGroup(proxyGroups, {
-            name: autoSelectorName,
-            type: 'fallback',
-            use: ['main-provider', 'fallback-provider'],
-            filter: '^(MAIN|WL)-AUTO-',
-            url: healthCheckUrl,
-            interval: 300,
-            timeout: 6_000,
-            lazy: true,
-            hidden: true,
-        });
-        const countrySelectorNames: string[] = [];
-        for (const cc of nonAutoCountries) {
-            const { emoji, label } = COUNTRY_LABELS[cc] ?? COUNTRY_LABEL_FALLBACK(cc);
-            const selectorName = `${emoji} ${label}`;
-            countrySelectorNames.push(selectorName);
-            this.upsertProxyGroup(proxyGroups, {
-                name: selectorName,
-                type: 'fallback',
-                use: ['main-provider', 'fallback-provider'],
-                filter: `^(MAIN|WL)-${cc}-`,
-                url: healthCheckUrl,
-                interval: 300,
-                timeout: 6_000,
-                lazy: true,
-                hidden: true,
-            });
-        }
-
-        // 3. Top-level VPN selector — `select` with country options
-        this.upsertProxyGroup(proxyGroups, {
-            name: this.mihomoVpnGroupName,
-            type: 'select',
-            proxies: [autoSelectorName, ...countrySelectorNames],
-            url: healthCheckUrl,
-        });
-
-        mihomoConfig['proxy-groups'] = proxyGroups;
-
         return dump(mihomoConfig, {
             lineWidth: -1,
             noRefs: true,
@@ -507,54 +441,8 @@ export class RootService {
         return parsedConfig;
     }
 
-    private getProxyGroups(config: MihomoConfig): MihomoProxyGroup[] {
-        const proxyGroups = config['proxy-groups'];
-
-        if (!Array.isArray(proxyGroups)) {
-            return [];
-        }
-
-        return proxyGroups.filter((group): group is MihomoProxyGroup => {
-            if (!this.isPlainObject(group)) {
-                return false;
-            }
-
-            return typeof group.name === 'string' && typeof group.type === 'string';
-        });
-    }
-
-    private upsertProxyGroup(proxyGroups: MihomoProxyGroup[], nextGroup: MihomoProxyGroup): void {
-        const existingIndex = proxyGroups.findIndex((group) => group.name === nextGroup.name);
-
-        if (existingIndex === -1) {
-            proxyGroups.push(nextGroup);
-            return;
-        }
-
-        proxyGroups[existingIndex] = nextGroup;
-    }
-
     private isPlainObject(value: unknown): value is MihomoConfig {
         return typeof value === 'object' && value !== null && !Array.isArray(value);
-    }
-
-    private extractCountryCodes(mihomoConfig: MihomoConfig): string[] {
-        const proxies = Array.isArray(mihomoConfig['proxies']) ? mihomoConfig['proxies'] : [];
-        const codes = new Set<string>();
-        for (const proxy of proxies) {
-            if (!this.isPlainObject(proxy)) continue;
-            const name = typeof proxy['name'] === 'string' ? proxy['name'] : '';
-            const m = name.match(MAIN_PROXY_NAME_RE);
-            if (!m) continue;
-            codes.add(m[1]); // AUTO or 2-letter code
-        }
-        const sorted = Array.from(codes);
-        sorted.sort((a, b) => {
-            if (a === 'AUTO') return -1;
-            if (b === 'AUTO') return 1;
-            return a.localeCompare(b);
-        });
-        return sorted;
     }
 
     private getHwidHeader(req: Request): string[] | undefined {
