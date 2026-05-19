@@ -20,6 +20,7 @@ import { useState } from 'react'
 import clsx from 'clsx'
 
 import {
+    constructHappSubscriptionUrl,
     constructMihomoSubscriptionUrl,
     constructSubscriptionUrl
 } from '@shared/utils/construct-subscription-url'
@@ -87,12 +88,17 @@ export const InstallationGuideConnector = (props: IProps) => {
         window.location.href,
         subscription.user.shortUuid
     )
+    const happSubscriptionUrl = constructHappSubscriptionUrl(
+        window.location.href,
+        subscription.user.shortUuid
+    )
 
     const handleButtonClick = (button: TSubscriptionPageButtonConfig) => {
         let formattedUrl: string | undefined
 
         if (button.type === 'subscriptionLink' || button.type === 'copyButton') {
             formattedUrl = TemplateEngine.formatWithMetaInfo(button.link, {
+                happSubscriptionUrl,
                 mihomoSubscriptionUrl,
                 username: subscription.user.username,
                 subscriptionUrl

@@ -2,6 +2,7 @@ import { TSubscriptionPageTemplateKey } from '@remnawave/subscription-page-types
 import { createHappCryptoLink } from '@kastov/cryptohapp'
 
 type TSubscriptionPageExtendedTemplateKey =
+    | 'HAPP_SUBSCRIPTION_LINK'
     | 'MIHOMO_SUBSCRIPTION_LINK'
     | TSubscriptionPageTemplateKey
 
@@ -19,16 +20,22 @@ type LazyTemplateValues = {
 export class TemplateEngine {
     static formatWithMetaInfo(
         template: string,
-        metaInfo: { mihomoSubscriptionUrl: string; subscriptionUrl: string; username: string }
+        metaInfo: {
+            happSubscriptionUrl: string
+            mihomoSubscriptionUrl: string
+            subscriptionUrl: string
+            username: string
+        }
     ): string {
         return this.replaceLazy(template, {
             USERNAME: metaInfo.username,
             SUBSCRIPTION_LINK: metaInfo.subscriptionUrl,
             MIHOMO_SUBSCRIPTION_LINK: metaInfo.mihomoSubscriptionUrl,
+            HAPP_SUBSCRIPTION_LINK: metaInfo.happSubscriptionUrl,
             HAPP_CRYPT3_LINK: () =>
-                createHappCryptoLink(metaInfo.subscriptionUrl, 'v3', true) || 'unknown',
+                createHappCryptoLink(metaInfo.happSubscriptionUrl, 'v3', true) || 'unknown',
             HAPP_CRYPT4_LINK: () =>
-                createHappCryptoLink(metaInfo.subscriptionUrl, 'v4', true) || 'unknown'
+                createHappCryptoLink(metaInfo.happSubscriptionUrl, 'v4', true) || 'unknown'
         })
     }
 
