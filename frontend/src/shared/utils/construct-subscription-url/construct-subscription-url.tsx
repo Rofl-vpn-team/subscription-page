@@ -45,3 +45,24 @@ export const constructMihomoSubscriptionUrl = (
 
     return stringifyParsedURL(url)
 }
+
+export const constructHappSubscriptionUrl = (
+    currentUrl: string,
+    mainShortUuid: string
+): string => {
+    const url = prepareSubscriptionUrl(currentUrl)
+    const segments = url.pathname.split('/').filter(Boolean)
+
+    if (segments.at(-1) === mainShortUuid) {
+        segments.pop()
+    }
+
+    if (segments.at(-1) === 'happ') {
+        segments.pop()
+    }
+
+    segments.push('happ', mainShortUuid)
+    url.pathname = joinURL('/', ...segments)
+
+    return stringifyParsedURL(url)
+}
