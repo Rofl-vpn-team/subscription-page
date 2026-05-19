@@ -159,6 +159,100 @@ export class RootService {
         }
     }
 
+    public async serveAggregatedHappConfig(
+        clientIp: string,
+        req: Request,
+        res: Response,
+        mainShortUuid: string,
+    ): Promise<void> {
+        try {
+            const mainResp = await this.axiosService.getSubscription(
+                clientIp,
+                mainShortUuid,
+                req.headers,
+                false,
+                undefined,
+            );
+
+            if (!mainResp) {
+                res.status(404).send('Not Found');
+                return;
+            }
+
+            const fallbackLookupResult = await this.getFallbackLookupResult(
+                clientIp,
+                mainShortUuid,
+            );
+
+            if (!fallbackLookupResult.isMainFound) {
+                this.logger.warn(
+                    `Main Happ config exists, but Remnawave user lookup failed for ${mainShortUuid}; returning main config only.`,
+                );
+                this.setProxyHeaders(res, mainResp.headers);
+                res.status(200).send(mainResp.response);
+                return;
+            }
+
+            if (!fallbackLookupResult.fallbackShortUuid) {
+                this.logger.debug(
+                    `No fallbackShortUuid for ${mainShortUuid}; returning main Happ config without merge.`,
+                );
+                this.setProxyHeaders(res, mainResp.headers);
+                res.status(200).send(mainResp.response);
+                return;
+            }
+
+            const fallbackResp = await this.axiosService.getSubscription(
+                clientIp,
+                fallbackLookupResult.fallbackShortUuid,
+                req.headers,
+                false,
+                undefined,
+            );
+
+            if (!fallbackResp) {
+                this.logger.warn(
+                    `Fallback Happ subscription fetch failed for ${fallbackLookupResult.fallbackShortUuid}; returning main config only.`,
+                );
+                this.setProxyHeaders(res, mainResp.headers);
+                res.status(200).send(mainResp.response);
+                return;
+            }
+
+            const merged = this.mergeHappSubscriptionPayloads(
+                mainResp.response,
+                fallbackResp.response,
+            );
+
+            this.setProxyHeaders(res, mainResp.headers);
+            res.status(200).send(merged);
+        } catch (error) {
+            this.logger.error('Error in serveAggregatedHappConfig', error);
+            res.socket?.destroy();
+            return;
+        }
+    }
+
+    private mergeHappSubscriptionPayloads(
+        mainPayload: unknown,
+        fallbackPayload: unknown,
+    ): string {
+        const mainText =
+            typeof mainPayload === 'string'
+                ? Buffer.from(mainPayload, 'base64').toString('utf-8')
+                : '';
+        const fallbackText =
+            typeof fallbackPayload === 'string'
+                ? Buffer.from(fallbackPayload, 'base64').toString('utf-8')
+                : '';
+
+        const mainLines = mainText.split('\n').filter((line) => line.trim().length > 0);
+        const fallbackLines = fallbackText.split('\n').filter((line) => line.trim().length > 0);
+
+        const merged = [...mainLines, ...fallbackLines].join('\n');
+        return Buffer.from(merged, 'utf-8').toString('base64');
+    }
+
     public async serveSubscriptionPage(
         clientIp: string,
         req: Request,

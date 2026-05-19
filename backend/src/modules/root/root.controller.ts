@@ -44,6 +44,21 @@ export class RootController {
         );
     }
 
+    @Get('happ/:mainShortUuid')
+    async happ(
+        @ClientIp() clientIp: string,
+        @Req() request: Request,
+        @Res() response: Response,
+        @Param('mainShortUuid') mainShortUuid: string,
+    ) {
+        return await this.rootService.serveAggregatedHappConfig(
+            clientIp,
+            request,
+            response,
+            mainShortUuid,
+        );
+    }
+
     @Get('provider/main/:mainShortUuid')
     async mainMihomoProvider(
         @ClientIp() clientIp: string,
