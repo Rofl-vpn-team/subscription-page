@@ -189,6 +189,7 @@ export class RootService {
                     `Main Happ config exists, but Remnawave user lookup failed for ${mainShortUuid}; returning main config only.`,
                 );
                 this.setProxyHeaders(res, mainResp.headers);
+                this.applyNoCacheHeaders(res);
                 res.status(200).send(mainResp.response);
                 return;
             }
@@ -198,6 +199,7 @@ export class RootService {
                     `No fallbackShortUuid for ${mainShortUuid}; returning main Happ config without merge.`,
                 );
                 this.setProxyHeaders(res, mainResp.headers);
+                this.applyNoCacheHeaders(res);
                 res.status(200).send(mainResp.response);
                 return;
             }
@@ -215,6 +217,7 @@ export class RootService {
                     `Fallback Happ subscription fetch failed for ${fallbackLookupResult.fallbackShortUuid}; returning main config only.`,
                 );
                 this.setProxyHeaders(res, mainResp.headers);
+                this.applyNoCacheHeaders(res);
                 res.status(200).send(mainResp.response);
                 return;
             }
@@ -225,6 +228,7 @@ export class RootService {
             );
 
             this.setProxyHeaders(res, mainResp.headers);
+            this.applyNoCacheHeaders(res);
             res.status(200).send(merged);
         } catch (error) {
             this.logger.error('Error in serveAggregatedHappConfig', error);
@@ -589,6 +593,19 @@ export class RootService {
             .forEach(([key, value]) => {
                 res.setHeader(key, value);
             });
+    }
+
+    private applyNoCacheHeaders(res: Response): void {
+        // Force no client-side caching for dynamic subscription payloads.
+        // Cache-Control + Pragma + Expires for well-behaved clients.
+        // ETag forced unique per-response to defeat clients that ignore
+        // Cache-Control and validate via If-None-Match (observed in Happ
+        // on macOS Catalyst: it kept stale local body on every refresh
+        // because the upstream ETag matched, triggering 304 Not Modified).
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('ETag', `W/"${Date.now().toString(36)}-${nanoid(10)}"`);
     }
 
     private generateJwtForCookie(uuid: string | null): string {
