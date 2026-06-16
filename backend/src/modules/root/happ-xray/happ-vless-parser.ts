@@ -45,7 +45,7 @@ export function parseHappVlessLine(line: string): HappParsedVlessLink {
 
 function decodeRemark(hash: string): string {
     const withoutHash = hash.startsWith('#') ? hash.slice(1) : hash;
-    const decoded = decodeURIComponent(withoutHash);
+    const decoded = decodeURIComponent(withoutHash.endsWith('%') ? withoutHash.slice(0, -1) : withoutHash);
 
     return decoded.split('?serverDescription=')[0];
 }

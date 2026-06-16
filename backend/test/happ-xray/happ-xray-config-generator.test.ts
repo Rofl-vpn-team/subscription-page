@@ -59,6 +59,16 @@ test('buildGroupedHappXrayConfig maps VLESS REALITY fields into streamSettings',
     assert.equal('publicKey' in outbound.streamSettings.realitySettings!, false);
 });
 
+test('buildGroupedHappXrayConfig accepts tcp VLESS transport from Remnawave links', () => {
+    const tcpAuto = AUTO_1.replace('&type=raw', '&type=tcp');
+    const config = buildGroupedHappXrayConfig([parseHappVlessLine(tcpAuto)], {
+        observatoryUrl: 'https://www.gstatic.com/generate_204',
+        whitelistSuffix: ' [White Cipher]',
+    });
+
+    assert.equal(config.outbounds[0].streamSettings.network, 'tcp');
+});
+
 test('buildGroupedHappXrayConfig rejects REALITY links missing required pbk', () => {
     const missingPbk = AUTO_1.replace('&pbk=PBK1', '');
 

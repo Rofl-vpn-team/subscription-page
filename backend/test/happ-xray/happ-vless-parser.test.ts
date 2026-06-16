@@ -91,3 +91,11 @@ test('parseHappVlessLine redacts query values when reporting malformed links', (
         },
     );
 });
+
+test('parseHappVlessLine tolerates trailing malformed percent in remark', () => {
+    const parsed = parseHappVlessLine(
+        'vless://44444444-4444-4444-8444-444444444444@example.com:443?encryption=none&type=tcp&security=reality&sni=example.com&fp=firefox&pbk=PUBLICKEY&sid=bbbbbbbbbbbbbbbb#%F0%9F%87%B3%F0%9F%87%B1%20%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B%201%20%5BWhite%20Cipher%5D%',
+    );
+
+    assert.equal(parsed.remark, '🇳🇱 Нидерланды 1 [White Cipher]');
+});

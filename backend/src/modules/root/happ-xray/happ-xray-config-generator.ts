@@ -48,7 +48,7 @@ function buildOutbound(tag: string, link: HappParsedVlessLink): HappXrayOutbound
     const realitySettings = buildRealitySettings(tag, link);
     const network = link.query.type ?? 'raw';
 
-    if (network !== 'raw') {
+    if (network !== 'raw' && network !== 'tcp') {
         throw new Error(`Unsupported VLESS transport "${network}" for outbound ${tag} (${link.address})`);
     }
 

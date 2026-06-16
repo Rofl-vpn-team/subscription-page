@@ -12,6 +12,8 @@ const MAIN_LINK =
     'vless://11111111-1111-4111-8111-111111111111@main.example:443?encryption=none&flow=xtls-rprx-vision&type=raw&security=reality&sni=main.example&fp=firefox&pbk=PBK1&sid=1111111111111111#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%201';
 const FALLBACK_LINK =
     'vless://22222222-2222-4222-8222-222222222222@fallback.example:443?encryption=none&type=raw&security=reality&sni=fallback.example&fp=firefox&pbk=PBK2&sid=2222222222222222#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%202';
+const DEV_TCP_WHITE_CIPHER_LINK =
+    'vless://22222222-2222-4222-8222-222222222222@85.198.97.235:443?encryption=none&flow=xtls-rprx-vision&type=tcp&security=reality&sni=ya.ru&fp=firefox&pbk=PBK2&sid=2222222222222222#%F0%9F%87%B3%F0%9F%87%B1%20%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B%201%20%5BWhite%20Cipher%5D%';
 
 test('serveAggregatedHappConfig keeps base64 merge when grouped Xray flag is false', async () => {
     const { res, service } = createService({ HAPP_XRAY_GROUPED_CONFIG_ENABLED: false });
@@ -60,6 +62,34 @@ test('serveAggregatedHappConfig falls back to base64 when grouped Xray build fai
     assert.doesNotMatch(logger.warns[0], /11111111-1111-4111-8111-111111111111/);
     assert.doesNotMatch(logger.warns[0], /22222222-2222-4222-8222-222222222222/);
     assert.doesNotMatch(logger.warns[0], /PBK/);
+});
+
+test('serveAggregatedHappConfig returns JSON for dev tcp links with malformed trailing remark percent', async () => {
+    const tcpMain = MAIN_LINK.replace('&type=raw', '&type=tcp');
+    const { logger, res, service } = createService(
+        { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
+        {
+            fallbackPayload: encodeLines([DEV_TCP_WHITE_CIPHER_LINK]),
+            mainPayload: encodeLines([tcpMain]),
+        },
+    );
+
+    await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
+    assert.equal(logger.warns.length, 0);
+
+    const config = JSON.parse(res.body as string);
+
+    assert.deepEqual(
+        config.outbounds.map((outbound: { streamSettings: { network: string } }) => outbound.streamSettings.network),
+        ['tcp', 'tcp'],
+    );
+    assert.deepEqual(
+        config.routing.balancers.map((balancer: { tag: string }) => balancer.tag),
+        ['balancer_MAIN_0', 'balancer_WL_1'],
+    );
 });
 
 test('serveAggregatedHappConfig returns grouped Xray JSON when no fallback short uuid exists', async () => {
