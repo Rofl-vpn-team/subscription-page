@@ -62,13 +62,22 @@ export interface HappXrayConfig {
         balancers?: Array<{
             fallbackTag: string;
             selector: string[];
-            strategy: { type: 'leastPing' };
+            strategy: {
+                settings: {
+                    baselines: string[];
+                    expected: number;
+                    maxRTT: string;
+                    tolerance: number;
+                };
+                type: 'leastLoad';
+            };
             tag: string;
         }>;
         domainMatcher: 'hybrid';
         domainStrategy: 'IPIfNonMatch';
         rules: Array<{
             balancerTag?: string;
+            domain?: string[];
             network?: string;
             outboundTag?: string;
             protocol?: string[];

@@ -26,10 +26,41 @@ test('buildGroupedHappXrayConfigs emits one top-level Happ config per visible gr
         ['⚡ Авто', '🇳🇱 Нидерланды', '⚡ Авто [White Cipher]'],
     );
     assert.equal(configs[0].routing.balancers?.[0].tag, 'balancer_MAIN_0');
+    assert.equal(configs[0].routing.balancers?.[0].strategy.type, 'leastLoad');
+    assert.deepEqual(configs[0].routing.balancers?.[0].strategy.settings, {
+        baselines: ['200ms', '500ms'],
+        expected: 7,
+        maxRTT: '2500ms',
+        tolerance: 0,
+    });
     assert.equal(configs[0].routing.rules.at(-1)?.balancerTag, 'balancer_MAIN_0');
     assert.deepEqual(configs[0].burstObservatory?.subjectSelector, ['out_MAIN_0_']);
     assert.equal(configs[1].routing.balancers, undefined);
     assert.equal(configs[1].routing.rules.at(-1)?.outboundTag, 'out_MAIN_1_1');
+});
+
+test('buildGroupedHappXrayConfigs routes Russian sites directly before proxy catch-all', () => {
+    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(AUTO_1)], {
+        observatoryUrl: 'https://www.gstatic.com/generate_204',
+        whitelistSuffix: ' [White Cipher]',
+    });
+
+    assert.deepEqual(configs[0].routing.rules[0], {
+        outboundTag: 'direct',
+        protocol: ['bittorrent'],
+        type: 'field',
+    });
+    assert.equal(configs[0].routing.rules[1].outboundTag, 'direct');
+    assert.equal(configs[0].routing.rules[1].type, 'field');
+    assert.ok(configs[0].routing.rules[1].domain?.includes('domain:ru'));
+    assert.ok(configs[0].routing.rules[1].domain?.includes('geosite:category-ru'));
+    assert.ok(configs[0].routing.rules[1].domain?.includes('domain:yandex'));
+    assert.ok(configs[0].routing.rules[1].domain?.includes('domain:kontur.host'));
+    assert.deepEqual(configs[0].routing.rules[2], {
+        network: 'tcp',
+        outboundTag: 'out_MAIN_0_1',
+        type: 'field',
+    });
 });
 
 test('buildGroupedHappXrayConfigs maps VLESS REALITY fields into Happ-compatible vnext streamSettings', () => {
