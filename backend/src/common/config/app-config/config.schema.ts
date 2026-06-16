@@ -18,6 +18,14 @@ export const configSchema = z
         SUBPAGE_CONFIG_UUID: z.string().default('00000000-0000-0000-0000-000000000000'),
         CUSTOM_SUB_PREFIX: z.optional(z.string()),
         SUBSCRIPTION_PUBLIC_BASE_URL: z.optional(z.string()),
+        HAPP_XRAY_GROUPED_CONFIG_ENABLED: z
+            .string()
+            .default('false')
+            .transform((val) => (val === '' ? 'false' : val))
+            .refine((val) => val === 'true' || val === 'false', 'Must be "true" or "false".')
+            .transform((val) => val === 'true'),
+        HAPP_XRAY_OBSERVATORY_URL: z.string().default('https://www.gstatic.com/generate_204'),
+        HAPP_XRAY_WHITELIST_SUFFIX: z.string().default(' [White Cipher]'),
 
         CADDY_AUTH_API_TOKEN: z.optional(z.string()),
         CLOUDFLARE_ZERO_TRUST_CLIENT_ID: z.optional(z.string()),
@@ -45,6 +53,16 @@ export const configSchema = z
                 code: z.ZodIssueCode.custom,
                 message: 'REMNAWAVE_PANEL_URL must start with http:// or https://',
                 path: ['REMNAWAVE_PANEL_URL'],
+            });
+        }
+        if (
+            !data.HAPP_XRAY_OBSERVATORY_URL.startsWith('http://') &&
+            !data.HAPP_XRAY_OBSERVATORY_URL.startsWith('https://')
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'HAPP_XRAY_OBSERVATORY_URL must start with http:// or https://',
+                path: ['HAPP_XRAY_OBSERVATORY_URL'],
             });
         }
         if (

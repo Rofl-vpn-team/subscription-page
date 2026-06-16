@@ -16,6 +16,7 @@ import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
+import { buildGroupedHappXrayConfigs, parseHappVlessLine } from './happ-xray';
 import { SubpageConfigService } from './subpage-config.service';
 
 const MIHOMO_CLIENT_TYPE = 'mihomo' as const satisfies TRequestTemplateTypeKeys;
@@ -39,6 +40,9 @@ type MihomoConfig = Record<string, unknown>;
 export class RootService {
     private readonly logger = new Logger(RootService.name);
 
+    private readonly happXrayGroupedConfigEnabled: boolean;
+    private readonly happXrayObservatoryUrl: string;
+    private readonly happXrayWhitelistSuffix: string;
     private readonly isMarzbanLegacyLinkEnabled: boolean;
     private readonly marzbanSecretKeys: string[];
     private readonly mlDropRevokedSubscriptions: boolean;
@@ -53,6 +57,15 @@ export class RootService {
         );
         this.mlDropRevokedSubscriptions = this.configService.getOrThrow<boolean>(
             'MARZBAN_LEGACY_DROP_REVOKED_SUBSCRIPTIONS',
+        );
+        this.happXrayGroupedConfigEnabled = this.configService.getOrThrow<boolean>(
+            'HAPP_XRAY_GROUPED_CONFIG_ENABLED',
+        );
+        this.happXrayObservatoryUrl = this.configService.getOrThrow<string>(
+            'HAPP_XRAY_OBSERVATORY_URL',
+        );
+        this.happXrayWhitelistSuffix = this.configService.getOrThrow<string>(
+            'HAPP_XRAY_WHITELIST_SUFFIX',
         );
 
         const marzbanSecretKeys = this.configService.get<string>('MARZBAN_LEGACY_SECRET_KEY');
@@ -188,9 +201,7 @@ export class RootService {
                 this.logger.warn(
                     `Main Happ config exists, but Remnawave user lookup failed for ${mainShortUuid}; returning main config only.`,
                 );
-                this.setProxyHeaders(res, mainResp.headers);
-                this.applyNoCacheHeaders(res);
-                res.status(200).send(mainResp.response);
+                this.sendHappPayload(res, mainResp.headers, mainResp.response);
                 return;
             }
 
@@ -198,9 +209,7 @@ export class RootService {
                 this.logger.debug(
                     `No fallbackShortUuid for ${mainShortUuid}; returning main Happ config without merge.`,
                 );
-                this.setProxyHeaders(res, mainResp.headers);
-                this.applyNoCacheHeaders(res);
-                res.status(200).send(mainResp.response);
+                this.sendHappPayload(res, mainResp.headers, mainResp.response);
                 return;
             }
 
@@ -216,9 +225,7 @@ export class RootService {
                 this.logger.warn(
                     `Fallback Happ subscription fetch failed for ${fallbackLookupResult.fallbackShortUuid}; returning main config only.`,
                 );
-                this.setProxyHeaders(res, mainResp.headers);
-                this.applyNoCacheHeaders(res);
-                res.status(200).send(mainResp.response);
+                this.sendHappPayload(res, mainResp.headers, mainResp.response);
                 return;
             }
 
@@ -226,10 +233,7 @@ export class RootService {
                 mainResp.response,
                 fallbackResp.response,
             );
-
-            this.setProxyHeaders(res, mainResp.headers);
-            this.applyNoCacheHeaders(res);
-            res.status(200).send(merged);
+            this.sendHappPayload(res, mainResp.headers, merged);
         } catch (error) {
             this.logger.error('Error in serveAggregatedHappConfig', error);
             res.socket?.destroy();
@@ -237,24 +241,72 @@ export class RootService {
         }
     }
 
-    private mergeHappSubscriptionPayloads(
-        mainPayload: unknown,
-        fallbackPayload: unknown,
-    ): string {
-        const mainText =
-            typeof mainPayload === 'string'
-                ? Buffer.from(mainPayload, 'base64').toString('utf-8')
-                : '';
-        const fallbackText =
-            typeof fallbackPayload === 'string'
-                ? Buffer.from(fallbackPayload, 'base64').toString('utf-8')
-                : '';
-
-        const mainLines = mainText.split('\n').filter((line) => line.trim().length > 0);
-        const fallbackLines = fallbackText.split('\n').filter((line) => line.trim().length > 0);
+    private mergeHappSubscriptionPayloads(mainPayload: unknown, fallbackPayload: unknown): string {
+        const mainLines = this.decodeHappSubscriptionPayloadLines(mainPayload);
+        const fallbackLines = this.decodeHappSubscriptionPayloadLines(fallbackPayload);
 
         const merged = [...mainLines, ...fallbackLines].join('\n');
         return Buffer.from(merged, 'utf-8').toString('base64');
+    }
+
+    private sendHappPayload(
+        res: Response,
+        headers: RawAxiosResponseHeaders | AxiosResponseHeaders,
+        payload: unknown,
+    ): void {
+        const groupedHappXrayPayload = this.tryBuildGroupedHappXrayPayload(payload);
+
+        this.setProxyHeaders(res, headers);
+        this.applyNoCacheHeaders(res);
+        if (groupedHappXrayPayload) {
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        }
+        res.status(200).send(groupedHappXrayPayload ?? payload);
+    }
+
+    private tryBuildGroupedHappXrayPayload(payload: unknown): string | null {
+        if (!this.happXrayGroupedConfigEnabled) {
+            return null;
+        }
+
+        let lineCount = 0;
+
+        try {
+            const lines = this.decodeHappSubscriptionPayloadLines(payload);
+            lineCount = lines.length;
+
+            const configs = buildGroupedHappXrayConfigs(lines.map(parseHappVlessLine), {
+                observatoryUrl: this.happXrayObservatoryUrl,
+                whitelistSuffix: this.happXrayWhitelistSuffix,
+            });
+
+            return JSON.stringify(configs);
+        } catch (error) {
+            this.logger.warn(
+                `Grouped Happ Xray config build failed; returning base64 Happ payload. lineCount=${lineCount}; error=${this.getSafeErrorMessage(error)}`,
+            );
+
+            return null;
+        }
+    }
+
+    private decodeHappSubscriptionPayloadLines(payload: unknown): string[] {
+        if (typeof payload !== 'string') {
+            return [];
+        }
+
+        return Buffer.from(payload, 'base64')
+            .toString('utf-8')
+            .split('\n')
+            .filter((line) => line.trim().length > 0);
+    }
+
+    private getSafeErrorMessage(error: unknown): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+
+        return String(error);
     }
 
     public async serveSubscriptionPage(

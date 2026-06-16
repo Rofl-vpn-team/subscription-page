@@ -17,6 +17,7 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "test:happ-xray": "node --require ts-node/register --require tsconfig-paths/register --test \"test/happ-xray/**/*.test.ts\"",
     "start": "nest start",
     "start:dev": "NODE_ENV=development nest start --watch",
     "start:debug": "NODE_ENV=development nest start --debug --watch",
