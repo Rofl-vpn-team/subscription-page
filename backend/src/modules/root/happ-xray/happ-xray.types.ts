@@ -30,43 +30,107 @@ export interface HappXrayGeneratorOptions {
 export type HappTier = 'MAIN' | 'WL';
 
 export interface HappXrayConfig {
-    observatory: {
-        enableConcurrency: boolean;
-        probeInterval: string;
-        probeUrl: string;
+    burstObservatory?: {
+        pingConfig: {
+            connectivity: string;
+            destination: string;
+            interval: string;
+            sampling: number;
+            timeout: string;
+        };
         subjectSelector: string[];
     };
+    dns: {
+        queryStrategy: 'UseIP';
+        servers: string[];
+    };
+    inbounds: Array<{
+        listen: '127.0.0.1';
+        port: number;
+        protocol: 'socks' | 'http';
+        settings: Record<string, unknown>;
+        sniffing?: {
+            destOverride: string[];
+            enabled: boolean;
+            routeOnly: boolean;
+        };
+        tag: string;
+    }>;
     outbounds: HappXrayOutbound[];
+    remarks: string;
     routing: {
-        balancers: Array<{
+        balancers?: Array<{
+            fallbackTag: string;
             selector: string[];
             strategy: { type: 'leastPing' };
             tag: string;
         }>;
-        domainStrategy: 'AsIs';
-        rules: [];
+        domainMatcher: 'hybrid';
+        domainStrategy: 'IPIfNonMatch';
+        rules: Array<{
+            balancerTag?: string;
+            network?: string;
+            outboundTag?: string;
+            protocol?: string[];
+            type: 'field';
+        }>;
     };
 }
 
-export interface HappXrayOutbound {
-    protocol: 'vless';
-    settings: {
-        address: string;
-        encryption: string;
-        flow?: string;
-        id: string;
-        port: number;
-    };
-    streamSettings: {
-        network: string;
-        realitySettings?: {
-            fingerprint?: string;
-            password?: string;
-            serverName?: string;
-            shortId?: string;
-            spiderX?: string;
-        };
-        security: string;
-    };
-    tag: string;
-}
+export type HappXrayOutbound =
+    | {
+          mux: {
+              concurrency: number;
+              enabled: boolean;
+          };
+          protocol: 'vless';
+          settings: {
+              vnext: Array<{
+                  address: string;
+                  port: number;
+                  users: Array<{
+                      encryption: string;
+                      flow?: string;
+                      id: string;
+                      level: number;
+                  }>;
+              }>;
+          };
+          streamSettings: {
+              network: string;
+              realitySettings?: {
+                  allowInsecure: boolean;
+                  fingerprint?: string;
+                  publicKey?: string;
+                  serverName?: string;
+                  shortId?: string;
+                  show: boolean;
+                  spiderX?: string;
+              };
+              security: string;
+              tcpSettings?: {
+                  header: {
+                      type: 'none';
+                  };
+              };
+          };
+          tag: string;
+      }
+    | {
+          protocol: 'freedom';
+          settings: {
+              domainStrategy: 'UseIP';
+          };
+          tag: 'direct';
+      }
+    | {
+          protocol: 'blackhole';
+          settings: {
+              response: {
+                  type: 'http';
+              };
+          };
+          tag: 'block';
+      };
+
+export type HappXrayProxyOutbound = Extract<HappXrayOutbound, { protocol: 'vless' }>;

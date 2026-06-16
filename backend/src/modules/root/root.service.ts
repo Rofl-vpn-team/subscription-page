@@ -16,7 +16,7 @@ import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
-import { buildGroupedHappXrayConfig, parseHappVlessLine } from './happ-xray';
+import { buildGroupedHappXrayConfigs, parseHappVlessLine } from './happ-xray';
 import { SubpageConfigService } from './subpage-config.service';
 
 const MIHOMO_CLIENT_TYPE = 'mihomo' as const satisfies TRequestTemplateTypeKeys;
@@ -275,12 +275,12 @@ export class RootService {
             const lines = this.decodeHappSubscriptionPayloadLines(payload);
             lineCount = lines.length;
 
-            const config = buildGroupedHappXrayConfig(lines.map(parseHappVlessLine), {
+            const configs = buildGroupedHappXrayConfigs(lines.map(parseHappVlessLine), {
                 observatoryUrl: this.happXrayObservatoryUrl,
                 whitelistSuffix: this.happXrayWhitelistSuffix,
             });
 
-            return JSON.stringify(config);
+            return JSON.stringify(configs);
         } catch (error) {
             this.logger.warn(
                 `Grouped Happ Xray config build failed; returning base64 Happ payload. lineCount=${lineCount}; error=${this.getSafeErrorMessage(error)}`,

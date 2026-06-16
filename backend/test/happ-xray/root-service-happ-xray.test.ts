@@ -25,7 +25,7 @@ test('serveAggregatedHappConfig keeps base64 merge when grouped Xray flag is fal
     assert.equal(res.headers['content-type'], 'text/plain');
 });
 
-test('serveAggregatedHappConfig returns grouped Xray JSON when grouped Xray flag is true', async () => {
+test('serveAggregatedHappConfig returns grouped Happ JSON config collection when grouped Xray flag is true', async () => {
     const { res, service } = createService({ HAPP_XRAY_GROUPED_CONFIG_ENABLED: true });
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
@@ -33,17 +33,15 @@ test('serveAggregatedHappConfig returns grouped Xray JSON when grouped Xray flag
     assert.equal(res.statusCode, 200);
     assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
 
-    const config = JSON.parse(res.body as string);
+    const configs = JSON.parse(res.body as string);
 
     assert.deepEqual(
-        config.outbounds.map((outbound: { tag: string }) => outbound.tag),
-        ['out_MAIN_0_1', 'out_MAIN_0_2'],
+        configs.map((config: { remarks: string }) => config.remarks),
+        ['⚡ Авто'],
     );
-    assert.deepEqual(
-        config.routing.balancers.map((balancer: { tag: string }) => balancer.tag),
-        ['balancer_MAIN_0'],
-    );
-    assert.equal(config.observatory.probeUrl, 'https://www.gstatic.com/generate_204');
+    assert.equal(configs[0].routing.balancers[0].tag, 'balancer_MAIN_0');
+    assert.equal(configs[0].routing.rules.at(-1).balancerTag, 'balancer_MAIN_0');
+    assert.equal(configs[0].burstObservatory.pingConfig.destination, 'https://www.gstatic.com/generate_204');
 });
 
 test('serveAggregatedHappConfig falls back to base64 when grouped Xray build fails', async () => {
@@ -80,15 +78,19 @@ test('serveAggregatedHappConfig returns JSON for dev tcp links with malformed tr
     assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
     assert.equal(logger.warns.length, 0);
 
-    const config = JSON.parse(res.body as string);
+    const configs = JSON.parse(res.body as string);
 
     assert.deepEqual(
-        config.outbounds.map((outbound: { streamSettings: { network: string } }) => outbound.streamSettings.network),
+        configs.flatMap((config: { outbounds: Array<{ streamSettings?: { network: string } }> }) =>
+            config.outbounds
+                .filter((outbound) => outbound.streamSettings)
+                .map((outbound) => outbound.streamSettings?.network),
+        ),
         ['tcp', 'tcp'],
     );
     assert.deepEqual(
-        config.routing.balancers.map((balancer: { tag: string }) => balancer.tag),
-        ['balancer_MAIN_0', 'balancer_WL_1'],
+        configs.map((config: { remarks: string }) => config.remarks),
+        ['⚡ Авто', '🇳🇱 Нидерланды [White Cipher]'],
     );
 });
 
@@ -103,15 +105,11 @@ test('serveAggregatedHappConfig returns grouped Xray JSON when no fallback short
     assert.equal(res.statusCode, 200);
     assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
 
-    const config = JSON.parse(res.body as string);
+    const configs = JSON.parse(res.body as string);
 
     assert.deepEqual(
-        config.outbounds.map((outbound: { tag: string }) => outbound.tag),
-        ['out_MAIN_0_1'],
-    );
-    assert.deepEqual(
-        config.routing.balancers.map((balancer: { tag: string }) => balancer.tag),
-        ['balancer_MAIN_0'],
+        configs.map((config: { remarks: string }) => config.remarks),
+        ['⚡ Авто'],
     );
 });
 
@@ -126,15 +124,11 @@ test('serveAggregatedHappConfig returns grouped Xray JSON when fallback subscrip
     assert.equal(res.statusCode, 200);
     assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
 
-    const config = JSON.parse(res.body as string);
+    const configs = JSON.parse(res.body as string);
 
     assert.deepEqual(
-        config.outbounds.map((outbound: { tag: string }) => outbound.tag),
-        ['out_MAIN_0_1'],
-    );
-    assert.deepEqual(
-        config.routing.balancers.map((balancer: { tag: string }) => balancer.tag),
-        ['balancer_MAIN_0'],
+        configs.map((config: { remarks: string }) => config.remarks),
+        ['⚡ Авто'],
     );
 });
 
