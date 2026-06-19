@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ConfigService } from '@nestjs/config';
-
 import { AxiosService } from '../../src/common/axios/axios.service';
-import { configSchema } from '../../src/common/config/app-config/config.schema';
+import { configSchema, TypedConfigService } from '../../src/common/config/app-config';
 import { RootService } from '../../src/modules/root/root.service';
 import { SubpageConfigService } from '../../src/modules/root/subpage-config.service';
 
@@ -199,8 +197,9 @@ function createService(
         mainPayload: subscriptionOverrides.mainPayload ?? encodeLines([MAIN_LINK]),
     });
     const logger = new CapturingLogger();
+    const typedConfig = new TypedConfigService(config as never);
     const service = new RootService(
-        config as unknown as ConfigService,
+        typedConfig,
         { sign: () => 'jwt' } as never,
         axios as unknown as AxiosService,
         { getEncryptedSubpageConfigUuid: () => 'encrypted' } as unknown as SubpageConfigService,

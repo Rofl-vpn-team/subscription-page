@@ -5,7 +5,12 @@ import '@gfazioli/mantine-spinner/styles.css'
 
 import './global.css'
 
-import { ColorSchemeScript, DirectionProvider, MantineProvider } from '@mantine/core'
+import {
+    ColorSchemeScript,
+    DirectionProvider,
+    MantineProvider,
+    v8CssVariablesResolver
+} from '@mantine/core'
 import { polyfillCountryFlagEmojis } from 'country-flag-emoji-polyfill'
 import { enableMainThreadBlocking } from 'ios-vibrator-pro-max'
 import { NavigationProgress } from '@mantine/nprogress'
@@ -30,7 +35,12 @@ export function App() {
     return (
         <DirectionProvider>
             <ColorSchemeScript defaultColorScheme="light" />
-            <MantineProvider defaultColorScheme="light" forceColorScheme="light" theme={theme}>
+            <MantineProvider
+                cssVariablesResolver={v8CssVariablesResolver}
+                defaultColorScheme="light"
+                forceColorScheme="light"
+                theme={theme}
+            >
                 <ModalsProvider>
                     <Notifications position={mq ? 'top-right' : 'bottom-right'} />
                     <NavigationProgress />
