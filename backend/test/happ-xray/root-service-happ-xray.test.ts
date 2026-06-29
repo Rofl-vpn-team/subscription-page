@@ -142,8 +142,21 @@ test('configSchema parses Happ Xray defaults and string values', () => {
     assert.equal(defaultValues.HAPP_XRAY_GROUPED_CONFIG_ENABLED, false);
     assert.equal(defaultValues.HAPP_XRAY_OBSERVATORY_URL, 'https://www.gstatic.com/generate_204');
     assert.equal(defaultValues.HAPP_XRAY_WHITELIST_SUFFIX, ' [White Cipher]');
+    assert.equal(defaultValues.HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY, '');
+    assert.equal(
+        defaultValues.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION,
+        'https://www.gstatic.com/generate_204',
+    );
+    assert.equal(defaultValues.HAPP_XRAY_BURST_OBSERVATORY_INTERVAL, '2m');
+    assert.equal(defaultValues.HAPP_XRAY_BURST_OBSERVATORY_SAMPLING, 3);
+    assert.equal(defaultValues.HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT, '3s');
 
     const enabled = configSchema.parse({
+        HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: 'https://connect.example/204',
+        HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: 'https://probe.example/new',
+        HAPP_XRAY_BURST_OBSERVATORY_INTERVAL: '30s',
+        HAPP_XRAY_BURST_OBSERVATORY_SAMPLING: '5',
+        HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT: '1500ms',
         HAPP_XRAY_GROUPED_CONFIG_ENABLED: 'true',
         HAPP_XRAY_OBSERVATORY_URL: 'http://probe.example/status',
         HAPP_XRAY_WHITELIST_SUFFIX: ' [Allow]',
@@ -157,10 +170,49 @@ test('configSchema parses Happ Xray defaults and string values', () => {
     assert.equal(enabledValues.HAPP_XRAY_GROUPED_CONFIG_ENABLED, true);
     assert.equal(enabledValues.HAPP_XRAY_OBSERVATORY_URL, 'http://probe.example/status');
     assert.equal(enabledValues.HAPP_XRAY_WHITELIST_SUFFIX, ' [Allow]');
+    assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY, 'https://connect.example/204');
+    assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION, 'https://probe.example/new');
+    assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_INTERVAL, '30s');
+    assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_SAMPLING, 5);
+    assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT, '1500ms');
+
+    const aliasOnly = configSchema.parse({
+        HAPP_XRAY_OBSERVATORY_URL: 'https://probe.example/legacy',
+        INTERNAL_JWT_SECRET: 'secret',
+        REMNAWAVE_API_TOKEN: 'token',
+        REMNAWAVE_PANEL_URL: 'https://panel.example',
+    }) as Record<string, unknown>;
+
+    assert.equal(
+        aliasOnly.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION,
+        'https://probe.example/legacy',
+    );
+
+    const newDestinationWins = configSchema.parse({
+        HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: 'https://probe.example/new',
+        HAPP_XRAY_OBSERVATORY_URL: 'https://probe.example/legacy',
+        INTERNAL_JWT_SECRET: 'secret',
+        REMNAWAVE_API_TOKEN: 'token',
+        REMNAWAVE_PANEL_URL: 'https://panel.example',
+    }) as Record<string, unknown>;
+
+    assert.equal(
+        newDestinationWins.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION,
+        'https://probe.example/new',
+    );
 
     assert.equal(
         configSchema.safeParse({
             HAPP_XRAY_OBSERVATORY_URL: 'ftp://probe.example/status',
+            INTERNAL_JWT_SECRET: 'secret',
+            REMNAWAVE_API_TOKEN: 'token',
+            REMNAWAVE_PANEL_URL: 'https://panel.example',
+        }).success,
+        false,
+    );
+    assert.equal(
+        configSchema.safeParse({
+            HAPP_XRAY_BURST_OBSERVATORY_SAMPLING: '0',
             INTERNAL_JWT_SECRET: 'secret',
             REMNAWAVE_API_TOKEN: 'token',
             REMNAWAVE_PANEL_URL: 'https://panel.example',
