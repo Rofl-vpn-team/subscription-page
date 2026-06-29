@@ -69,7 +69,10 @@ test('buildGroupedHappXrayConfigs uses supplied burst observatory ping config', 
 });
 
 test('buildGroupedHappXrayConfigs routes Russian sites directly before proxy catch-all', () => {
-    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(AUTO_1)], DEFAULT_GENERATOR_OPTIONS);
+    const configs = buildGroupedHappXrayConfigs(
+        [parseHappVlessLine(AUTO_1)],
+        DEFAULT_GENERATOR_OPTIONS,
+    );
 
     assert.deepEqual(configs[0].routing.rules[0], {
         outboundTag: 'direct',
@@ -90,7 +93,10 @@ test('buildGroupedHappXrayConfigs routes Russian sites directly before proxy cat
 });
 
 test('buildGroupedHappXrayConfigs maps VLESS REALITY fields into Happ-compatible vnext streamSettings', () => {
-    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(AUTO_1)], DEFAULT_GENERATOR_OPTIONS);
+    const configs = buildGroupedHappXrayConfigs(
+        [parseHappVlessLine(AUTO_1)],
+        DEFAULT_GENERATOR_OPTIONS,
+    );
     const outbound = configs[0].outbounds[0];
 
     assert.equal(outbound.protocol, 'vless');
@@ -123,7 +129,10 @@ test('buildGroupedHappXrayConfigs maps VLESS REALITY fields into Happ-compatible
 
 test('buildGroupedHappXrayConfigs accepts tcp VLESS transport from Remnawave links', () => {
     const tcpAuto = AUTO_1.replace('&type=raw', '&type=tcp');
-    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(tcpAuto)], DEFAULT_GENERATOR_OPTIONS);
+    const configs = buildGroupedHappXrayConfigs(
+        [parseHappVlessLine(tcpAuto)],
+        DEFAULT_GENERATOR_OPTIONS,
+    );
 
     const outbound = configs[0].outbounds.find((item) => item.protocol === 'vless');
 
