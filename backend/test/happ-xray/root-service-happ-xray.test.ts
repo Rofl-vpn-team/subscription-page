@@ -39,7 +39,33 @@ test('serveAggregatedHappConfig returns grouped Happ JSON config collection when
     );
     assert.equal(configs[0].routing.balancers[0].tag, 'balancer_MAIN_0');
     assert.equal(configs[0].routing.rules.at(-1).balancerTag, 'balancer_MAIN_0');
-    assert.equal(configs[0].burstObservatory.pingConfig.destination, 'https://www.gstatic.com/generate_204');
+    assert.equal(
+        configs[0].burstObservatory.pingConfig.destination,
+        'https://www.gstatic.com/generate_204',
+    );
+});
+
+test('serveAggregatedHappConfig applies custom burst observatory ping config', async () => {
+    const { res, service } = createService({
+        HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: 'https://connect.example/204',
+        HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: 'https://probe.example/204',
+        HAPP_XRAY_BURST_OBSERVATORY_INTERVAL: '45s',
+        HAPP_XRAY_BURST_OBSERVATORY_SAMPLING: 7,
+        HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT: '1200ms',
+        HAPP_XRAY_GROUPED_CONFIG_ENABLED: true,
+    });
+
+    await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
+
+    const configs = JSON.parse(res.body as string);
+
+    assert.deepEqual(configs[0].burstObservatory.pingConfig, {
+        connectivity: 'https://connect.example/204',
+        destination: 'https://probe.example/204',
+        interval: '45s',
+        sampling: 7,
+        timeout: '1200ms',
+    });
 });
 
 test('serveAggregatedHappConfig falls back to base64 when grouped Xray build fails', async () => {
@@ -170,8 +196,14 @@ test('configSchema parses Happ Xray defaults and string values', () => {
     assert.equal(enabledValues.HAPP_XRAY_GROUPED_CONFIG_ENABLED, true);
     assert.equal(enabledValues.HAPP_XRAY_OBSERVATORY_URL, 'http://probe.example/status');
     assert.equal(enabledValues.HAPP_XRAY_WHITELIST_SUFFIX, ' [Allow]');
-    assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY, 'https://connect.example/204');
-    assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION, 'https://probe.example/new');
+    assert.equal(
+        enabledValues.HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY,
+        'https://connect.example/204',
+    );
+    assert.equal(
+        enabledValues.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION,
+        'https://probe.example/new',
+    );
     assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_INTERVAL, '30s');
     assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_SAMPLING, 5);
     assert.equal(enabledValues.HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT, '1500ms');
@@ -183,10 +215,7 @@ test('configSchema parses Happ Xray defaults and string values', () => {
         REMNAWAVE_PANEL_URL: 'https://panel.example',
     }) as Record<string, unknown>;
 
-    assert.equal(
-        aliasOnly.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION,
-        'https://probe.example/legacy',
-    );
+    assert.equal(aliasOnly.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION, 'https://probe.example/legacy');
 
     const newDestinationWins = configSchema.parse({
         HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: 'https://probe.example/new',
@@ -230,6 +259,11 @@ function createService(
     } = {},
 ) {
     const config = new StubConfigService({
+        HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: '',
+        HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: 'https://www.gstatic.com/generate_204',
+        HAPP_XRAY_BURST_OBSERVATORY_INTERVAL: '2m',
+        HAPP_XRAY_BURST_OBSERVATORY_SAMPLING: 3,
+        HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT: '3s',
         HAPP_XRAY_GROUPED_CONFIG_ENABLED: false,
         HAPP_XRAY_OBSERVATORY_URL: 'https://www.gstatic.com/generate_204',
         HAPP_XRAY_WHITELIST_SUFFIX: ' [White Cipher]',

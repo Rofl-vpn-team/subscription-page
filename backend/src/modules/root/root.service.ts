@@ -16,6 +16,7 @@ import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
 import { buildGroupedHappXrayConfigs, parseHappVlessLine } from './happ-xray';
+import type { HappXrayBurstObservatoryPingConfig } from './happ-xray';
 import { SubpageConfigService } from './subpage-config.service';
 
 const MIHOMO_CLIENT_TYPE = 'mihomo' as const satisfies TRequestTemplateTypeKeys;
@@ -40,7 +41,7 @@ export class RootService {
     private readonly logger = new Logger(RootService.name);
 
     private readonly happXrayGroupedConfigEnabled: boolean;
-    private readonly happXrayObservatoryUrl: string;
+    private readonly happXrayBurstObservatoryPingConfig: HappXrayBurstObservatoryPingConfig;
     private readonly happXrayWhitelistSuffix: string;
     private readonly isMarzbanLegacyLinkEnabled: boolean;
     private readonly marzbanSecretKeys: string[];
@@ -60,12 +61,14 @@ export class RootService {
         this.happXrayGroupedConfigEnabled = this.configService.getOrThrow(
             'HAPP_XRAY_GROUPED_CONFIG_ENABLED',
         );
-        this.happXrayObservatoryUrl = this.configService.getOrThrow(
-            'HAPP_XRAY_OBSERVATORY_URL',
-        );
-        this.happXrayWhitelistSuffix = this.configService.getOrThrow(
-            'HAPP_XRAY_WHITELIST_SUFFIX',
-        );
+        this.happXrayBurstObservatoryPingConfig = {
+            connectivity: this.configService.getOrThrow('HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY'),
+            destination: this.configService.getOrThrow('HAPP_XRAY_BURST_OBSERVATORY_DESTINATION'),
+            interval: this.configService.getOrThrow('HAPP_XRAY_BURST_OBSERVATORY_INTERVAL'),
+            sampling: this.configService.getOrThrow('HAPP_XRAY_BURST_OBSERVATORY_SAMPLING'),
+            timeout: this.configService.getOrThrow('HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT'),
+        };
+        this.happXrayWhitelistSuffix = this.configService.getOrThrow('HAPP_XRAY_WHITELIST_SUFFIX');
 
         const marzbanSecretKeys = this.configService.get('MARZBAN_LEGACY_SECRET_KEY');
 
@@ -275,7 +278,7 @@ export class RootService {
             lineCount = lines.length;
 
             const configs = buildGroupedHappXrayConfigs(lines.map(parseHappVlessLine), {
-                observatoryUrl: this.happXrayObservatoryUrl,
+                burstObservatoryPingConfig: this.happXrayBurstObservatoryPingConfig,
                 whitelistSuffix: this.happXrayWhitelistSuffix,
             });
 
@@ -614,9 +617,7 @@ export class RootService {
     }
 
     private getPublicBaseUrl(req: Request): string {
-        const configuredBaseUrl = this.configService.get(
-            'SUBSCRIPTION_PUBLIC_BASE_URL',
-        );
+        const configuredBaseUrl = this.configService.get('SUBSCRIPTION_PUBLIC_BASE_URL');
 
         if (configuredBaseUrl) {
             return configuredBaseUrl.replace(/\/+$/, '');
