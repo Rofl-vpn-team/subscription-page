@@ -22,8 +22,16 @@ export interface HappGroup {
     tier: HappTier;
 }
 
+export interface HappXrayBurstObservatoryPingConfig {
+    connectivity: string;
+    destination: string;
+    interval: string;
+    sampling: number;
+    timeout: string;
+}
+
 export interface HappXrayGeneratorOptions {
-    observatoryUrl: string;
+    burstObservatoryPingConfig: HappXrayBurstObservatoryPingConfig;
     whitelistSuffix: string;
 }
 
@@ -31,13 +39,7 @@ export type HappTier = 'MAIN' | 'WL';
 
 export interface HappXrayConfig {
     burstObservatory?: {
-        pingConfig: {
-            connectivity: string;
-            destination: string;
-            interval: string;
-            sampling: number;
-            timeout: string;
-        };
+        pingConfig: HappXrayBurstObservatoryPingConfig;
         subjectSelector: string[];
     };
     dns: {

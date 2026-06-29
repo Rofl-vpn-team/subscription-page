@@ -12,13 +12,21 @@ const NL_1 =
 const WL_AUTO =
     'vless://22222222-2222-4222-8222-222222222222@wl-auto.example:443?encryption=none&type=raw&security=reality&sni=wl-auto.example&fp=firefox&pbk=PBK3&sid=3333333333333333#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%201%20%5BWhite%20Cipher%5D';
 
+const DEFAULT_GENERATOR_OPTIONS = {
+    burstObservatoryPingConfig: {
+        connectivity: '',
+        destination: 'https://www.gstatic.com/generate_204',
+        interval: '2m',
+        sampling: 3,
+        timeout: '3s',
+    },
+    whitelistSuffix: ' [White Cipher]',
+};
+
 test('buildGroupedHappXrayConfigs emits one top-level Happ config per visible group', () => {
     const configs = buildGroupedHappXrayConfigs(
         [AUTO_1, AUTO_2, NL_1, WL_AUTO].map(parseHappVlessLine),
-        {
-            observatoryUrl: 'https://www.gstatic.com/generate_204',
-            whitelistSuffix: ' [White Cipher]',
-        },
+        DEFAULT_GENERATOR_OPTIONS,
     );
 
     assert.deepEqual(
@@ -39,11 +47,29 @@ test('buildGroupedHappXrayConfigs emits one top-level Happ config per visible gr
     assert.equal(configs[1].routing.rules.at(-1)?.outboundTag, 'out_MAIN_1_1');
 });
 
-test('buildGroupedHappXrayConfigs routes Russian sites directly before proxy catch-all', () => {
-    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(AUTO_1)], {
-        observatoryUrl: 'https://www.gstatic.com/generate_204',
+test('buildGroupedHappXrayConfigs uses supplied burst observatory ping config', () => {
+    const configs = buildGroupedHappXrayConfigs([AUTO_1, AUTO_2].map(parseHappVlessLine), {
+        burstObservatoryPingConfig: {
+            connectivity: 'https://connect.example/204',
+            destination: 'https://probe.example/204',
+            interval: '45s',
+            sampling: 7,
+            timeout: '1200ms',
+        },
         whitelistSuffix: ' [White Cipher]',
     });
+
+    assert.deepEqual(configs[0].burstObservatory?.pingConfig, {
+        connectivity: 'https://connect.example/204',
+        destination: 'https://probe.example/204',
+        interval: '45s',
+        sampling: 7,
+        timeout: '1200ms',
+    });
+});
+
+test('buildGroupedHappXrayConfigs routes Russian sites directly before proxy catch-all', () => {
+    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(AUTO_1)], DEFAULT_GENERATOR_OPTIONS);
 
     assert.deepEqual(configs[0].routing.rules[0], {
         outboundTag: 'direct',
@@ -64,10 +90,7 @@ test('buildGroupedHappXrayConfigs routes Russian sites directly before proxy cat
 });
 
 test('buildGroupedHappXrayConfigs maps VLESS REALITY fields into Happ-compatible vnext streamSettings', () => {
-    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(AUTO_1)], {
-        observatoryUrl: 'https://www.gstatic.com/generate_204',
-        whitelistSuffix: ' [White Cipher]',
-    });
+    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(AUTO_1)], DEFAULT_GENERATOR_OPTIONS);
     const outbound = configs[0].outbounds[0];
 
     assert.equal(outbound.protocol, 'vless');
@@ -100,10 +123,7 @@ test('buildGroupedHappXrayConfigs maps VLESS REALITY fields into Happ-compatible
 
 test('buildGroupedHappXrayConfigs accepts tcp VLESS transport from Remnawave links', () => {
     const tcpAuto = AUTO_1.replace('&type=raw', '&type=tcp');
-    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(tcpAuto)], {
-        observatoryUrl: 'https://www.gstatic.com/generate_204',
-        whitelistSuffix: ' [White Cipher]',
-    });
+    const configs = buildGroupedHappXrayConfigs([parseHappVlessLine(tcpAuto)], DEFAULT_GENERATOR_OPTIONS);
 
     const outbound = configs[0].outbounds.find((item) => item.protocol === 'vless');
 
@@ -115,10 +135,10 @@ test('buildGroupedHappXrayConfigs rejects REALITY links missing required pbk', (
 
     assert.throws(
         () =>
-            buildGroupedHappXrayConfigs([parseHappVlessLine(missingPbk)], {
-                observatoryUrl: 'https://www.gstatic.com/generate_204',
-                whitelistSuffix: ' [White Cipher]',
-            }),
+            buildGroupedHappXrayConfigs(
+                [parseHappVlessLine(missingPbk)],
+                DEFAULT_GENERATOR_OPTIONS,
+            ),
         /Missing required REALITY field "pbk" for outbound out_MAIN_0_1 \(auto1\.example\)/,
     );
 });
@@ -128,10 +148,7 @@ test('buildGroupedHappXrayConfigs rejects unsupported non-raw transports', () =>
 
     assert.throws(
         () =>
-            buildGroupedHappXrayConfigs([parseHappVlessLine(grpcLink)], {
-                observatoryUrl: 'https://www.gstatic.com/generate_204',
-                whitelistSuffix: ' [White Cipher]',
-            }),
+            buildGroupedHappXrayConfigs([parseHappVlessLine(grpcLink)], DEFAULT_GENERATOR_OPTIONS),
         /Unsupported VLESS transport "grpc" for outbound out_MAIN_0_1 \(auto1\.example\)/,
     );
 });

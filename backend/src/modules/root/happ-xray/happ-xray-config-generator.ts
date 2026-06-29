@@ -97,13 +97,7 @@ function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions)
         ...(hasBalancer
             ? {
                   burstObservatory: {
-                      pingConfig: {
-                          connectivity: '',
-                          destination: options.observatoryUrl,
-                          interval: '2m',
-                          sampling: 3,
-                          timeout: '3s',
-                      },
+                      pingConfig: options.burstObservatoryPingConfig,
                       subjectSelector: [group.selectorPrefix],
                   },
               }
