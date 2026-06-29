@@ -97,13 +97,7 @@ function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions)
         ...(hasBalancer
             ? {
                   burstObservatory: {
-                      pingConfig: {
-                          connectivity: '',
-                          destination: options.observatoryUrl,
-                          interval: '2m',
-                          sampling: 3,
-                          timeout: '3s',
-                      },
+                      pingConfig: options.burstObservatoryPingConfig,
                       subjectSelector: [group.selectorPrefix],
                   },
               }
@@ -200,7 +194,9 @@ function buildProxyOutbound(tag: string, link: HappParsedVlessLink): HappXrayPro
     const network = link.query.type ?? 'raw';
 
     if (network !== 'raw' && network !== 'tcp') {
-        throw new Error(`Unsupported VLESS transport "${network}" for outbound ${tag} (${link.address})`);
+        throw new Error(
+            `Unsupported VLESS transport "${network}" for outbound ${tag} (${link.address})`,
+        );
     }
 
     return {
@@ -275,7 +271,9 @@ function buildRealitySettings(
 
     for (const field of ['fp', 'pbk', 'sni'] as const) {
         if (!link.query[field]) {
-            throw new Error(`Missing required REALITY field "${field}" for outbound ${tag} (${link.address})`);
+            throw new Error(
+                `Missing required REALITY field "${field}" for outbound ${tag} (${link.address})`,
+            );
         }
     }
 

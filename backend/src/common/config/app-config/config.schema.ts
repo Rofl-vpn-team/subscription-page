@@ -10,6 +10,24 @@ const booleanString = (def: 'true' | 'false' = 'false') =>
         .transform((val) => val === 'true')
         .pipe(z.boolean());
 
+const defaultableString = (def: string) =>
+    z
+        .string()
+        .default(def)
+        .transform((val) => (val === '' ? def : val));
+
+const optionalNonEmptyString = () =>
+    z.preprocess((val) => (val === '' ? undefined : val), z.string().optional());
+
+const positiveIntegerString = (def: string) =>
+    z
+        .string()
+        .default(def)
+        .transform((val) => (val === '' ? def : val))
+        .refine((val) => /^[1-9]\d*$/.test(val), 'Must be a positive integer.')
+        .transform((val) => parseInt(val, 10))
+        .pipe(z.number().int().positive());
+
 const REQUIRED_REMNAWAVE_API_TOKEN_MESSAGE =
     'Remnawave Dashboard → Remnawave Settings → API Tokens. Create a new API Token and set it in the .env file.';
 
@@ -34,6 +52,11 @@ export const configSchema = z
             .refine((val) => val === 'true' || val === 'false', 'Must be "true" or "false".')
             .transform((val) => val === 'true'),
         HAPP_XRAY_OBSERVATORY_URL: z.string().default('https://www.gstatic.com/generate_204'),
+        HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: z.string().default(''),
+        HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: optionalNonEmptyString(),
+        HAPP_XRAY_BURST_OBSERVATORY_INTERVAL: defaultableString('2m'),
+        HAPP_XRAY_BURST_OBSERVATORY_SAMPLING: positiveIntegerString('3'),
+        HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT: defaultableString('3s'),
         HAPP_XRAY_WHITELIST_SUFFIX: z.string().default(' [White Cipher]'),
 
         CADDY_AUTH_API_TOKEN: z.optional(z.string()),
@@ -58,14 +81,22 @@ export const configSchema = z
                 path: ['REMNAWAVE_PANEL_URL'],
             });
         }
+        const burstObservatoryDestination =
+            data.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION ?? data.HAPP_XRAY_OBSERVATORY_URL;
+
         if (
-            !data.HAPP_XRAY_OBSERVATORY_URL.startsWith('http://') &&
-            !data.HAPP_XRAY_OBSERVATORY_URL.startsWith('https://')
+            !burstObservatoryDestination.startsWith('http://') &&
+            !burstObservatoryDestination.startsWith('https://')
         ) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: 'HAPP_XRAY_OBSERVATORY_URL must start with http:// or https://',
-                path: ['HAPP_XRAY_OBSERVATORY_URL'],
+                message:
+                    'HAPP_XRAY_BURST_OBSERVATORY_DESTINATION must start with http:// or https://',
+                path: [
+                    data.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION
+                        ? 'HAPP_XRAY_BURST_OBSERVATORY_DESTINATION'
+                        : 'HAPP_XRAY_OBSERVATORY_URL',
+                ],
             });
         }
         if (
@@ -88,7 +119,12 @@ export const configSchema = z
                 });
             }
         }
-    });
+    })
+    .transform((data) => ({
+        ...data,
+        HAPP_XRAY_BURST_OBSERVATORY_DESTINATION:
+            data.HAPP_XRAY_BURST_OBSERVATORY_DESTINATION ?? data.HAPP_XRAY_OBSERVATORY_URL,
+    }));
 
 export type ConfigSchema = z.infer<typeof configSchema>;
 export class Env extends createZodDto(configSchema) {}
