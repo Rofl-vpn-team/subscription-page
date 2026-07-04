@@ -78,6 +78,13 @@ const RUSSIAN_DIRECT_DOMAINS = [
 ];
 
 const RUSSIAN_DIRECT_IPS = ['geoip:ru'];
+const RUSSIAN_DNS_DOMAINS = [
+    'geosite:category-ru',
+    'domain:ru',
+    'domain:xn--p1ai',
+    'domain:yandex.net',
+];
+const YANDEX_DNS_DIRECT_IPS = ['77.88.8.8', '77.88.8.1'];
 const RUSSIAN_PROFILE_PREFIX = '\u{1F1F7}\u{1F1FA} \u0420\u043E\u0441\u0441\u0438\u044F';
 
 export function buildGroupedHappXrayConfigs(
@@ -131,8 +138,21 @@ function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions)
               }
             : {}),
         dns: {
-            queryStrategy: 'UseIP',
-            servers: ['https://8.8.8.8/dns-query', 'https://8.8.4.4/dns-query'],
+            disableFallbackIfMatch: true,
+            enableParallelQuery: true,
+            queryStrategy: 'UseIPv4',
+            servers: [
+                {
+                    address: '77.88.8.8',
+                    domains: RUSSIAN_DNS_DOMAINS,
+                },
+                {
+                    address: '77.88.8.1',
+                    domains: RUSSIAN_DNS_DOMAINS,
+                },
+                'https://8.8.8.8/dns-query',
+                'https://8.8.4.4/dns-query',
+            ],
         },
         inbounds: buildInbounds(),
         outbounds: [...proxyOutbounds, buildDirectOutbound(), buildBlockOutbound()],
@@ -164,6 +184,11 @@ function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions)
                 {
                     outboundTag: 'direct',
                     protocol: ['bittorrent'],
+                    type: 'field',
+                },
+                {
+                    ip: YANDEX_DNS_DIRECT_IPS,
+                    outboundTag: 'direct',
                     type: 'field',
                 },
                 ...directRussianResourceRules,
