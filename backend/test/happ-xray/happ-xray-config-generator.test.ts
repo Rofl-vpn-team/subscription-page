@@ -70,6 +70,56 @@ test('buildGroupedHappXrayConfigs uses supplied burst observatory ping config', 
     });
 });
 
+test('buildGroupedHappXrayConfigs resolves Russian resources through direct Yandex DNS', () => {
+    const configs = buildGroupedHappXrayConfigs(
+        [parseHappVlessLine(AUTO_1)],
+        DEFAULT_GENERATOR_OPTIONS,
+    );
+
+    assert.deepEqual(configs[0].dns, {
+        disableFallbackIfMatch: true,
+        enableParallelQuery: true,
+        queryStrategy: 'UseIPv4',
+        servers: [
+            {
+                address: '77.88.8.8',
+                domains: [
+                    'geosite:category-ru',
+                    'domain:ru',
+                    'domain:xn--p1ai',
+                    'domain:yandex.net',
+                ],
+            },
+            {
+                address: '77.88.8.1',
+                domains: [
+                    'geosite:category-ru',
+                    'domain:ru',
+                    'domain:xn--p1ai',
+                    'domain:yandex.net',
+                ],
+            },
+            'https://8.8.8.8/dns-query',
+            'https://8.8.4.4/dns-query',
+        ],
+    });
+
+    const dnsRuleIndex = configs[0].routing.rules.findIndex((rule) =>
+        rule.ip?.includes('77.88.8.8'),
+    );
+    const proxyRuleIndex = configs[0].routing.rules.findIndex(
+        (rule) => rule.balancerTag || rule.outboundTag?.startsWith('out_'),
+    );
+
+    assert.notEqual(dnsRuleIndex, -1);
+    assert.ok(dnsRuleIndex < proxyRuleIndex);
+    assert.deepEqual(configs[0].routing.rules[dnsRuleIndex], {
+        ip: ['77.88.8.8', '77.88.8.1'],
+        outboundTag: 'direct',
+        type: 'field',
+    });
+});
+
 test('buildGroupedHappXrayConfigs routes Russian sites and IPs directly before proxy catch-all', () => {
     const configs = buildGroupedHappXrayConfigs(
         [parseHappVlessLine(AUTO_1)],
@@ -81,18 +131,23 @@ test('buildGroupedHappXrayConfigs routes Russian sites and IPs directly before p
         protocol: ['bittorrent'],
         type: 'field',
     });
-    assert.equal(configs[0].routing.rules[1].outboundTag, 'direct');
-    assert.equal(configs[0].routing.rules[1].type, 'field');
-    assert.ok(configs[0].routing.rules[1].domain?.includes('domain:ru'));
-    assert.ok(configs[0].routing.rules[1].domain?.includes('geosite:category-ru'));
-    assert.ok(configs[0].routing.rules[1].domain?.includes('domain:yandex'));
-    assert.ok(configs[0].routing.rules[1].domain?.includes('domain:kontur.host'));
-    assert.deepEqual(configs[0].routing.rules[2], {
+    assert.deepEqual(configs[0].routing.rules[1], {
+        ip: ['77.88.8.8', '77.88.8.1'],
+        outboundTag: 'direct',
+        type: 'field',
+    });
+    assert.equal(configs[0].routing.rules[2].outboundTag, 'direct');
+    assert.equal(configs[0].routing.rules[2].type, 'field');
+    assert.ok(configs[0].routing.rules[2].domain?.includes('domain:ru'));
+    assert.ok(configs[0].routing.rules[2].domain?.includes('geosite:category-ru'));
+    assert.ok(configs[0].routing.rules[2].domain?.includes('domain:yandex'));
+    assert.ok(configs[0].routing.rules[2].domain?.includes('domain:kontur.host'));
+    assert.deepEqual(configs[0].routing.rules[3], {
         ip: ['geoip:ru'],
         outboundTag: 'direct',
         type: 'field',
     });
-    assert.deepEqual(configs[0].routing.rules[3], {
+    assert.deepEqual(configs[0].routing.rules[4], {
         network: 'tcp',
         outboundTag: 'out_MAIN_0_1',
         type: 'field',
@@ -110,6 +165,11 @@ test('buildGroupedHappXrayConfigs sends Russian profile sites through VPN', () =
         {
             outboundTag: 'direct',
             protocol: ['bittorrent'],
+            type: 'field',
+        },
+        {
+            ip: ['77.88.8.8', '77.88.8.1'],
+            outboundTag: 'direct',
             type: 'field',
         },
         {

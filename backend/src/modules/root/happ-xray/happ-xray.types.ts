@@ -43,8 +43,16 @@ export interface HappXrayConfig {
         subjectSelector: string[];
     };
     dns: {
-        queryStrategy: 'UseIP';
-        servers: string[];
+        disableFallbackIfMatch: boolean;
+        enableParallelQuery: boolean;
+        queryStrategy: 'UseIPv4';
+        servers: Array<
+            | string
+            | {
+                  address: string;
+                  domains: string[];
+              }
+        >;
     };
     inbounds: Array<{
         listen: '127.0.0.1';
