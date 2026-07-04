@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildGroupedHappXrayConfigs, parseHappVlessLine } from '../../src/modules/root/happ-xray';
+import { buildGroupedHappXrayConfigs, parseHappVlessLine } from '@modules/root/happ-xray';
 
 const AUTO_1 =
     'vless://11111111-1111-4111-8111-111111111111@auto1.example:443?encryption=none&flow=xtls-rprx-vision&type=raw&security=reality&sni=auto1.example&fp=firefox&pbk=PBK1&sid=1111111111111111#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%201';
@@ -9,6 +9,8 @@ const AUTO_2 =
     'vless://11111111-1111-4111-8111-111111111111@auto2.example:443?encryption=none&flow=xtls-rprx-vision&type=raw&security=reality&sni=auto2.example&fp=firefox&pbk=PBK2&sid=2222222222222222#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%202';
 const NL_1 =
     'vless://11111111-1111-4111-8111-111111111111@nl1.example:443?encryption=none&flow=xtls-rprx-vision&type=tcp&security=reality&sni=nl1.example&fp=firefox&pbk=PBK4&sid=4444444444444444#%F0%9F%87%B3%F0%9F%87%B1%20%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B%201';
+const RU_1 =
+    'vless://11111111-1111-4111-8111-111111111111@ru1.example:443?encryption=none&flow=xtls-rprx-vision&type=raw&security=reality&sni=ru1.example&fp=firefox&pbk=PBK5&sid=5555555555555555#%F0%9F%87%B7%F0%9F%87%BA%20%D0%A0%D0%BE%D1%81%D1%81%D0%B8%D1%8F%201';
 const WL_AUTO =
     'vless://22222222-2222-4222-8222-222222222222@wl-auto.example:443?encryption=none&type=raw&security=reality&sni=wl-auto.example&fp=firefox&pbk=PBK3&sid=3333333333333333#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%201%20%5BWhite%20Cipher%5D';
 
@@ -68,7 +70,7 @@ test('buildGroupedHappXrayConfigs uses supplied burst observatory ping config', 
     });
 });
 
-test('buildGroupedHappXrayConfigs routes Russian sites directly before proxy catch-all', () => {
+test('buildGroupedHappXrayConfigs routes Russian sites and IPs directly before proxy catch-all', () => {
     const configs = buildGroupedHappXrayConfigs(
         [parseHappVlessLine(AUTO_1)],
         DEFAULT_GENERATOR_OPTIONS,
@@ -86,10 +88,36 @@ test('buildGroupedHappXrayConfigs routes Russian sites directly before proxy cat
     assert.ok(configs[0].routing.rules[1].domain?.includes('domain:yandex'));
     assert.ok(configs[0].routing.rules[1].domain?.includes('domain:kontur.host'));
     assert.deepEqual(configs[0].routing.rules[2], {
+        ip: ['geoip:ru'],
+        outboundTag: 'direct',
+        type: 'field',
+    });
+    assert.deepEqual(configs[0].routing.rules[3], {
         network: 'tcp',
         outboundTag: 'out_MAIN_0_1',
         type: 'field',
     });
+});
+
+test('buildGroupedHappXrayConfigs sends Russian profile sites through VPN', () => {
+    const configs = buildGroupedHappXrayConfigs(
+        [parseHappVlessLine(RU_1)],
+        DEFAULT_GENERATOR_OPTIONS,
+    );
+
+    assert.equal(configs[0].remarks, '🇷🇺 Россия');
+    assert.deepEqual(configs[0].routing.rules, [
+        {
+            outboundTag: 'direct',
+            protocol: ['bittorrent'],
+            type: 'field',
+        },
+        {
+            network: 'tcp',
+            outboundTag: 'out_MAIN_0_1',
+            type: 'field',
+        },
+    ]);
 });
 
 test('buildGroupedHappXrayConfigs maps VLESS REALITY fields into Happ-compatible vnext streamSettings', () => {

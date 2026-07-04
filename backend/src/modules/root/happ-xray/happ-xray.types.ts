@@ -80,6 +80,7 @@ export interface HappXrayConfig {
         rules: Array<{
             balancerTag?: string;
             domain?: string[];
+            ip?: string[];
             network?: string;
             outboundTag?: string;
             protocol?: string[];

@@ -77,6 +77,9 @@ const RUSSIAN_DIRECT_DOMAINS = [
     'domain:kontur.host',
 ];
 
+const RUSSIAN_DIRECT_IPS = ['geoip:ru'];
+const RUSSIAN_PROFILE_PREFIX = '\u{1F1F7}\u{1F1FA} \u0420\u043E\u0441\u0441\u0438\u044F';
+
 export function buildGroupedHappXrayConfigs(
     links: HappParsedVlessLink[],
     options: HappXrayGeneratorOptions,
@@ -92,6 +95,31 @@ function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions)
     );
     const proxyTags = proxyOutbounds.map((outbound) => outbound.tag);
     const hasBalancer = proxyTags.length > 1;
+    const proxyRule = hasBalancer
+        ? {
+              balancerTag: group.balancerTag,
+              network: 'tcp',
+              type: 'field' as const,
+          }
+        : {
+              network: 'tcp',
+              outboundTag: proxyTags[0],
+              type: 'field' as const,
+          };
+    const directRussianResourceRules = isRussianProfile(group)
+        ? []
+        : [
+              {
+                  domain: RUSSIAN_DIRECT_DOMAINS,
+                  outboundTag: 'direct',
+                  type: 'field' as const,
+              },
+              {
+                  ip: RUSSIAN_DIRECT_IPS,
+                  outboundTag: 'direct',
+                  type: 'field' as const,
+              },
+          ];
 
     return {
         ...(hasBalancer
@@ -138,25 +166,18 @@ function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions)
                     protocol: ['bittorrent'],
                     type: 'field',
                 },
-                {
-                    domain: RUSSIAN_DIRECT_DOMAINS,
-                    outboundTag: 'direct',
-                    type: 'field',
-                },
-                hasBalancer
-                    ? {
-                          balancerTag: group.balancerTag,
-                          network: 'tcp',
-                          type: 'field',
-                      }
-                    : {
-                          network: 'tcp',
-                          outboundTag: proxyTags[0],
-                          type: 'field',
-                      },
+                ...directRussianResourceRules,
+                proxyRule,
             ],
         },
     };
+}
+
+function isRussianProfile(group: HappGroup): boolean {
+    return group.groupName
+        .replace(/\uFE0F/g, '')
+        .trim()
+        .startsWith(RUSSIAN_PROFILE_PREFIX);
 }
 
 function buildInbounds(): HappXrayConfig['inbounds'] {
