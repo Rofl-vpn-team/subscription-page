@@ -1,9 +1,4 @@
-import {
-    HappGroup,
-    HappGroupedCandidate,
-    HappParsedVlessLink,
-    HappTier,
-} from './happ-xray.types';
+import { HappGroup, HappGroupedCandidate, HappParsedVlessLink, HappTier } from './happ-xray.types';
 
 interface GroupHappLinksOptions {
     whitelistSuffix: string;
@@ -18,8 +13,7 @@ export function groupHappLinks(
 
     for (const link of links) {
         const tier = getTier(link.remark, options.whitelistSuffix);
-        const baseName = stripBridgeIndex(stripWhitelistSuffix(link.remark, options.whitelistSuffix));
-        const groupName = tier === 'WL' ? `${baseName}${options.whitelistSuffix}` : baseName;
+        const groupName = normalizeHappGroupName(link.remark, tier, options.whitelistSuffix);
         const key = `${tier}:${groupName}`;
 
         if (!buckets.has(key)) {
@@ -58,6 +52,16 @@ export function groupHappLinks(
             tier: first.tier,
         };
     });
+}
+
+export function normalizeHappGroupName(
+    remark: string,
+    tier: HappTier,
+    whitelistSuffix: string,
+): string {
+    const baseName = stripBridgeIndex(stripWhitelistSuffix(remark, whitelistSuffix));
+
+    return tier === 'WL' ? `${baseName}${whitelistSuffix}` : baseName;
 }
 
 function getTier(remark: string, whitelistSuffix: string): HappTier {

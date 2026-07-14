@@ -28,6 +28,15 @@ const positiveIntegerString = (def: string) =>
         .transform((val) => parseInt(val, 10))
         .pipe(z.number().int().positive());
 
+const integerRangeString = (def: string, minimum: number, maximum: number) =>
+    z
+        .string()
+        .default(def)
+        .transform((val) => (val === '' ? def : val))
+        .refine((val) => /^\d+$/.test(val), 'Must be an integer.')
+        .transform((val) => parseInt(val, 10))
+        .pipe(z.number().int().min(minimum).max(maximum));
+
 const REQUIRED_REMNAWAVE_API_TOKEN_MESSAGE =
     'Remnawave Dashboard → Remnawave Settings → API Tokens. Create a new API Token and set it in the .env file.';
 
@@ -51,6 +60,11 @@ export const configSchema = z
             .transform((val) => (val === '' ? 'false' : val))
             .refine((val) => val === 'true' || val === 'false', 'Must be "true" or "false".')
             .transform((val) => val === 'true'),
+        HAPP_XRAY_HYSTERIA_ALLOWLIST: z.string().default(''),
+        HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: z
+            .enum(['off', 'allowlist', 'percentage', 'on'])
+            .default('off'),
+        HAPP_XRAY_HYSTERIA_ROLLOUT_PERCENT: integerRangeString('0', 0, 100),
         HAPP_XRAY_OBSERVATORY_URL: z.string().default('https://www.gstatic.com/generate_204'),
         HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: z.string().default(''),
         HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: optionalNonEmptyString(),
@@ -71,6 +85,17 @@ export const configSchema = z
         EGAMES_COOKIE: z.optional(z.string()),
     })
     .superRefine((data, ctx) => {
+        if (
+            data.HAPP_XRAY_HYSTERIA_ROLLOUT_MODE !== 'off' &&
+            !data.HAPP_XRAY_GROUPED_CONFIG_ENABLED
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message:
+                    'HAPP_XRAY_GROUPED_CONFIG_ENABLED must be true when HAPP Xray Hysteria rollout is enabled.',
+                path: ['HAPP_XRAY_HYSTERIA_ROLLOUT_MODE'],
+            });
+        }
         if (
             !data.REMNAWAVE_PANEL_URL.startsWith('http://') &&
             !data.REMNAWAVE_PANEL_URL.startsWith('https://')
