@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildGroupedHappXrayConfigs, parseHappVlessLine } from '@modules/root/happ-xray';
+import {
+    buildGroupedHappXrayConfigs,
+    buildResolvedHappXrayConfigs,
+    HappResolvedGroup,
+    parseHappVlessLine,
+} from '@modules/root/happ-xray';
 
 const AUTO_1 =
     'vless://11111111-1111-4111-8111-111111111111@auto1.example:443?encryption=none&flow=xtls-rprx-vision&type=raw&security=reality&sni=auto1.example&fp=firefox&pbk=PBK1&sid=1111111111111111#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%201';
@@ -120,6 +125,43 @@ test('buildGroupedHappXrayConfigs resolves Russian resources through direct Yand
     });
 });
 
+test('HAPP generators route the server public-tracker category directly before proxy rules', () => {
+    const groupedConfigs = buildGroupedHappXrayConfigs(
+        [AUTO_1, RU_1, WL_AUTO].map(parseHappVlessLine),
+        DEFAULT_GENERATOR_OPTIONS,
+    );
+    const resolvedConfigs = buildResolvedHappXrayConfigs(
+        [resolvedGroup('MAIN', '⚡ Авто', ['vless', 'hysteria'])],
+        DEFAULT_GENERATOR_OPTIONS,
+    );
+    const expectedTrackerRule = {
+        domain: ['geosite:category-public-tracker'],
+        outboundTag: 'direct',
+        type: 'field' as const,
+    };
+
+    for (const config of [...groupedConfigs, ...resolvedConfigs]) {
+        const bittorrentRuleIndex = config.routing.rules.findIndex((rule) =>
+            rule.protocol?.includes('bittorrent'),
+        );
+        const trackerRuleIndex = config.routing.rules.findIndex((rule) =>
+            rule.domain?.includes('geosite:category-public-tracker'),
+        );
+        const firstProxyRuleIndex = config.routing.rules.findIndex(
+            (rule) =>
+                rule.network !== undefined &&
+                (rule.balancerTag !== undefined || rule.outboundTag?.startsWith('out_')),
+        );
+
+        assert.notEqual(bittorrentRuleIndex, -1);
+        assert.notEqual(trackerRuleIndex, -1);
+        assert.notEqual(firstProxyRuleIndex, -1);
+        assert.ok(bittorrentRuleIndex < trackerRuleIndex);
+        assert.ok(trackerRuleIndex < firstProxyRuleIndex);
+        assert.deepEqual(config.routing.rules[trackerRuleIndex], expectedTrackerRule);
+    }
+});
+
 test('buildGroupedHappXrayConfigs routes Russian sites and IPs directly before proxy catch-all', () => {
     const configs = buildGroupedHappXrayConfigs(
         [parseHappVlessLine(AUTO_1)],
@@ -132,22 +174,27 @@ test('buildGroupedHappXrayConfigs routes Russian sites and IPs directly before p
         type: 'field',
     });
     assert.deepEqual(configs[0].routing.rules[1], {
+        domain: ['geosite:category-public-tracker'],
+        outboundTag: 'direct',
+        type: 'field',
+    });
+    assert.deepEqual(configs[0].routing.rules[2], {
         ip: ['77.88.8.8', '77.88.8.1'],
         outboundTag: 'direct',
         type: 'field',
     });
-    assert.equal(configs[0].routing.rules[2].outboundTag, 'direct');
-    assert.equal(configs[0].routing.rules[2].type, 'field');
-    assert.ok(configs[0].routing.rules[2].domain?.includes('domain:ru'));
-    assert.ok(configs[0].routing.rules[2].domain?.includes('geosite:category-ru'));
-    assert.ok(configs[0].routing.rules[2].domain?.includes('domain:yandex'));
-    assert.ok(configs[0].routing.rules[2].domain?.includes('domain:kontur.host'));
-    assert.deepEqual(configs[0].routing.rules[3], {
+    assert.equal(configs[0].routing.rules[3].outboundTag, 'direct');
+    assert.equal(configs[0].routing.rules[3].type, 'field');
+    assert.ok(configs[0].routing.rules[3].domain?.includes('domain:ru'));
+    assert.ok(configs[0].routing.rules[3].domain?.includes('geosite:category-ru'));
+    assert.ok(configs[0].routing.rules[3].domain?.includes('domain:yandex'));
+    assert.ok(configs[0].routing.rules[3].domain?.includes('domain:kontur.host'));
+    assert.deepEqual(configs[0].routing.rules[4], {
         ip: ['geoip:ru'],
         outboundTag: 'direct',
         type: 'field',
     });
-    assert.deepEqual(configs[0].routing.rules[4], {
+    assert.deepEqual(configs[0].routing.rules[5], {
         network: 'tcp',
         outboundTag: 'out_MAIN_0_1',
         type: 'field',
@@ -165,6 +212,11 @@ test('buildGroupedHappXrayConfigs sends Russian profile sites through VPN', () =
         {
             outboundTag: 'direct',
             protocol: ['bittorrent'],
+            type: 'field',
+        },
+        {
+            domain: ['geosite:category-public-tracker'],
+            outboundTag: 'direct',
             type: 'field',
         },
         {
@@ -249,3 +301,164 @@ test('buildGroupedHappXrayConfigs rejects unsupported non-raw transports', () =>
         /Unsupported VLESS transport "grpc" for outbound out_MAIN_0_1 \(auto1\.example\)/,
     );
 });
+
+test('buildResolvedHappXrayConfigs routes TCP to Xray and UDP to Hysteria with opposite fallback', () => {
+    const config = buildResolvedHappXrayConfigs(
+        [resolvedGroup('MAIN', '⚡ Авто', ['vless', 'hysteria'])],
+        DEFAULT_GENERATOR_OPTIONS,
+    )[0];
+    const balancers = new Map(
+        config.routing.balancers?.map((balancer) => [balancer.tag, balancer]),
+    );
+
+    assert.deepEqual(balancers.get('balancer_MAIN_0_tcp_primary')?.selector, ['out_MAIN_0_xray_']);
+    assert.equal(
+        balancers.get('balancer_MAIN_0_tcp_primary')?.fallbackTag,
+        'loop_MAIN_0_tcp_to_hy2',
+    );
+    assert.deepEqual(balancers.get('balancer_MAIN_0_udp_primary')?.selector, ['out_MAIN_0_hy2_']);
+    assert.equal(
+        balancers.get('balancer_MAIN_0_udp_primary')?.fallbackTag,
+        'loop_MAIN_0_udp_to_xray',
+    );
+    assert.equal(balancers.get('balancer_MAIN_0_tcp_fallback')?.fallbackTag, 'block');
+    assert.equal(balancers.get('balancer_MAIN_0_udp_fallback')?.fallbackTag, 'block');
+    assert.deepEqual(config.burstObservatory?.subjectSelector, [
+        'out_MAIN_0_xray_',
+        'out_MAIN_0_hy2_',
+    ]);
+
+    assert.deepEqual(
+        config.outbounds.filter((outbound) => outbound.protocol === 'loopback'),
+        [
+            {
+                protocol: 'loopback',
+                settings: { inboundTag: 'fallback_MAIN_0_tcp_to_hy2' },
+                tag: 'loop_MAIN_0_tcp_to_hy2',
+            },
+            {
+                protocol: 'loopback',
+                settings: { inboundTag: 'fallback_MAIN_0_udp_to_xray' },
+                tag: 'loop_MAIN_0_udp_to_xray',
+            },
+        ],
+    );
+    assert.deepEqual(config.routing.rules.slice(0, 2), [
+        {
+            balancerTag: 'balancer_MAIN_0_tcp_fallback',
+            inboundTag: ['fallback_MAIN_0_tcp_to_hy2'],
+            type: 'field',
+        },
+        {
+            balancerTag: 'balancer_MAIN_0_udp_fallback',
+            inboundTag: ['fallback_MAIN_0_udp_to_xray'],
+            type: 'field',
+        },
+    ]);
+    assert.deepEqual(config.routing.rules.slice(-2), [
+        {
+            balancerTag: 'balancer_MAIN_0_udp_primary',
+            network: 'udp',
+            type: 'field',
+        },
+        {
+            balancerTag: 'balancer_MAIN_0_tcp_primary',
+            network: 'tcp',
+            type: 'field',
+        },
+    ]);
+});
+
+test('buildResolvedHappXrayConfigs uses one fail-closed Xray balancer when Hysteria is absent', () => {
+    const config = buildResolvedHappXrayConfigs(
+        [resolvedGroup('MAIN', '🇳🇱 Нидерланды', ['vless'])],
+        DEFAULT_GENERATOR_OPTIONS,
+    )[0];
+
+    assert.deepEqual(
+        config.routing.balancers?.map((balancer) => balancer.tag),
+        ['balancer_MAIN_0_xray_only'],
+    );
+    assert.equal(config.routing.balancers?.[0].fallbackTag, 'block');
+    assert.deepEqual(config.routing.rules.slice(-2), [
+        { balancerTag: 'balancer_MAIN_0_xray_only', network: 'udp', type: 'field' },
+        { balancerTag: 'balancer_MAIN_0_xray_only', network: 'tcp', type: 'field' },
+    ]);
+    assert.deepEqual(config.burstObservatory?.subjectSelector, ['out_MAIN_0_xray_']);
+});
+
+test('buildResolvedHappXrayConfigs uses one fail-closed Hysteria balancer when Xray is absent', () => {
+    const config = buildResolvedHappXrayConfigs(
+        [resolvedGroup('WL', '⚡ Авто [White Cipher]', ['hysteria'])],
+        DEFAULT_GENERATOR_OPTIONS,
+    )[0];
+
+    assert.deepEqual(
+        config.routing.balancers?.map((balancer) => balancer.tag),
+        ['balancer_WL_0_hy2_only'],
+    );
+    assert.equal(config.routing.balancers?.[0].fallbackTag, 'block');
+    assert.deepEqual(config.routing.rules.slice(-2), [
+        { balancerTag: 'balancer_WL_0_hy2_only', network: 'udp', type: 'field' },
+        { balancerTag: 'balancer_WL_0_hy2_only', network: 'tcp', type: 'field' },
+    ]);
+    assert.deepEqual(config.burstObservatory?.subjectSelector, ['out_WL_0_hy2_']);
+});
+
+test('buildResolvedHappXrayConfigs skips empty country groups', () => {
+    const emptyGroup: HappResolvedGroup = {
+        candidates: [],
+        groupName: '🇩🇪 Германия',
+        tier: 'MAIN',
+    };
+
+    assert.deepEqual(buildResolvedHappXrayConfigs([emptyGroup], DEFAULT_GENERATOR_OPTIONS), []);
+});
+
+function resolvedGroup(
+    tier: HappResolvedGroup['tier'],
+    groupName: string,
+    protocols: Array<'vless' | 'hysteria'>,
+): HappResolvedGroup {
+    return {
+        candidates: protocols.map((protocol, index) => ({
+            identity: `${protocol}-${index}`,
+            outbound:
+                protocol === 'vless'
+                    ? {
+                          protocol,
+                          settings: {
+                              vnext: [
+                                  {
+                                      address: `${groupName}-${index}.xray.example`,
+                                      port: 443,
+                                      users: [{ id: '11111111-1111-4111-8111-111111111111' }],
+                                  },
+                              ],
+                          },
+                          streamSettings: { network: 'raw', security: 'reality' },
+                          tag: `source-xray-${index}`,
+                      }
+                    : {
+                          protocol,
+                          settings: {
+                              address: `${groupName}-${index}.hy2.example`,
+                              port: 12000,
+                              version: 2,
+                          },
+                          streamSettings: {
+                              hysteriaSettings: {
+                                  auth: '11111111-1111-4111-8111-111111111111',
+                                  version: 2,
+                              },
+                              network: 'hysteria',
+                              security: 'tls',
+                          },
+                          tag: `source-hy2-${index}`,
+                      },
+            protocol,
+        })),
+        groupName,
+        tier,
+    };
+}

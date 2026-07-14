@@ -37,6 +37,32 @@ export interface HappXrayGeneratorOptions {
 
 export type HappTier = 'MAIN' | 'WL';
 
+export type HappProxyProtocol = 'vless' | 'hysteria';
+
+interface HappResolvedProxyOutboundFields {
+    mux?: Record<string, unknown>;
+    settings: Record<string, unknown>;
+    streamSettings: {
+        network: string;
+    } & Record<string, unknown>;
+    tag: string;
+}
+
+export type HappResolvedProxyOutbound = ({ protocol: 'vless' } | { protocol: 'hysteria' }) &
+    HappResolvedProxyOutboundFields;
+
+export interface HappResolvedCandidate {
+    identity: string;
+    outbound: HappResolvedProxyOutbound;
+    protocol: HappProxyProtocol;
+}
+
+export interface HappResolvedGroup {
+    candidates: HappResolvedCandidate[];
+    groupName: string;
+    tier: HappTier;
+}
+
 export interface HappXrayConfig {
     burstObservatory?: {
         pingConfig: HappXrayBurstObservatoryPingConfig;
@@ -89,6 +115,7 @@ export interface HappXrayConfig {
             balancerTag?: string;
             domain?: string[];
             ip?: string[];
+            inboundTag?: string[];
             network?: string;
             outboundTag?: string;
             protocol?: string[];
@@ -98,6 +125,7 @@ export interface HappXrayConfig {
 }
 
 export type HappXrayOutbound =
+    | HappResolvedProxyOutbound
     | {
           mux: {
               concurrency: number;
@@ -151,6 +179,13 @@ export type HappXrayOutbound =
               };
           };
           tag: 'block';
+      }
+    | {
+          protocol: 'loopback';
+          settings: {
+              inboundTag: string;
+          };
+          tag: string;
       };
 
 export type HappXrayProxyOutbound = Extract<HappXrayOutbound, { protocol: 'vless' }>;

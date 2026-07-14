@@ -1,6 +1,7 @@
 import {
     HappGroup,
     HappParsedVlessLink,
+    HappResolvedGroup,
     HappXrayConfig,
     HappXrayGeneratorOptions,
     HappXrayOutbound,
@@ -78,6 +79,7 @@ const RUSSIAN_DIRECT_DOMAINS = [
 ];
 
 const RUSSIAN_DIRECT_IPS = ['geoip:ru'];
+const PUBLIC_TRACKER_DOMAINS = ['geosite:category-public-tracker'];
 const RUSSIAN_DNS_DOMAINS = [
     'geosite:category-ru',
     'domain:ru',
@@ -94,6 +96,15 @@ export function buildGroupedHappXrayConfigs(
     return groupHappLinks(links, { whitelistSuffix: options.whitelistSuffix }).map((group) =>
         buildProfileConfig(group, options),
     );
+}
+
+export function buildResolvedHappXrayConfigs(
+    groups: HappResolvedGroup[],
+    options: HappXrayGeneratorOptions,
+): HappXrayConfig[] {
+    return groups
+        .filter((group) => group.candidates.length > 0)
+        .map((group, groupIndex) => buildResolvedProfileConfig(group, groupIndex, options));
 }
 
 function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions): HappXrayConfig {
@@ -113,7 +124,236 @@ function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions)
               outboundTag: proxyTags[0],
               type: 'field' as const,
           };
-    const directRussianResourceRules = isRussianProfile(group)
+    return {
+        ...(hasBalancer
+            ? {
+                  burstObservatory: {
+                      pingConfig: options.burstObservatoryPingConfig,
+                      subjectSelector: [group.selectorPrefix],
+                  },
+              }
+            : {}),
+        dns: buildDns(),
+        inbounds: buildInbounds(),
+        outbounds: [...proxyOutbounds, buildDirectOutbound(), buildBlockOutbound()],
+        remarks: group.groupName,
+        routing: {
+            ...(hasBalancer
+                ? {
+                      balancers: [
+                          buildLeastLoadBalancer(
+                              group.balancerTag,
+                              group.selectorPrefix,
+                              proxyTags[0],
+                          ),
+                      ],
+                  }
+                : {}),
+            domainMatcher: 'hybrid',
+            domainStrategy: 'IPIfNonMatch',
+            rules: [...buildDirectRoutingRules(group.groupName), proxyRule],
+        },
+    };
+}
+
+function buildResolvedProfileConfig(
+    group: HappResolvedGroup,
+    groupIndex: number,
+    options: HappXrayGeneratorOptions,
+): HappXrayConfig {
+    const tagBase = `${group.tier}_${groupIndex}`;
+    const xrayPrefix = `out_${tagBase}_xray_`;
+    const hysteriaPrefix = `out_${tagBase}_hy2_`;
+    const xrayOutbounds = group.candidates
+        .filter((candidate) => candidate.protocol === 'vless')
+        .map((candidate, index) => ({
+            ...candidate.outbound,
+            tag: `${xrayPrefix}${index + 1}`,
+        }));
+    const hysteriaOutbounds = group.candidates
+        .filter((candidate) => candidate.protocol === 'hysteria')
+        .map((candidate, index) => ({
+            ...candidate.outbound,
+            tag: `${hysteriaPrefix}${index + 1}`,
+        }));
+    const hasXray = xrayOutbounds.length > 0;
+    const hasHysteria = hysteriaOutbounds.length > 0;
+    const topology =
+        hasXray && hasHysteria
+            ? buildDualProtocolTopology(tagBase, xrayPrefix, hysteriaPrefix)
+            : buildSingleProtocolTopology(
+                  tagBase,
+                  hasXray ? 'xray' : 'hy2',
+                  hasXray ? xrayPrefix : hysteriaPrefix,
+              );
+
+    return {
+        burstObservatory: {
+            pingConfig: options.burstObservatoryPingConfig,
+            subjectSelector: topology.subjectSelectors,
+        },
+        dns: buildDns(),
+        inbounds: buildInbounds(),
+        outbounds: [
+            ...xrayOutbounds,
+            ...hysteriaOutbounds,
+            ...topology.loopbackOutbounds,
+            buildDirectOutbound(),
+            buildBlockOutbound(),
+        ],
+        remarks: group.groupName,
+        routing: {
+            balancers: topology.balancers,
+            domainMatcher: 'hybrid',
+            domainStrategy: 'IPIfNonMatch',
+            rules: [
+                ...topology.loopbackRules,
+                ...buildDirectRoutingRules(group.groupName),
+                ...topology.proxyRules,
+            ],
+        },
+    };
+}
+
+interface ResolvedTopology {
+    balancers: NonNullable<HappXrayConfig['routing']['balancers']>;
+    loopbackOutbounds: HappXrayOutbound[];
+    loopbackRules: HappXrayConfig['routing']['rules'];
+    proxyRules: HappXrayConfig['routing']['rules'];
+    subjectSelectors: string[];
+}
+
+function buildDualProtocolTopology(
+    tagBase: string,
+    xrayPrefix: string,
+    hysteriaPrefix: string,
+): ResolvedTopology {
+    const tcpLoopbackTag = `loop_${tagBase}_tcp_to_hy2`;
+    const udpLoopbackTag = `loop_${tagBase}_udp_to_xray`;
+    const tcpFallbackInboundTag = `fallback_${tagBase}_tcp_to_hy2`;
+    const udpFallbackInboundTag = `fallback_${tagBase}_udp_to_xray`;
+    const tcpPrimaryTag = `balancer_${tagBase}_tcp_primary`;
+    const udpPrimaryTag = `balancer_${tagBase}_udp_primary`;
+    const tcpFallbackTag = `balancer_${tagBase}_tcp_fallback`;
+    const udpFallbackTag = `balancer_${tagBase}_udp_fallback`;
+
+    return {
+        balancers: [
+            buildLeastLoadBalancer(tcpPrimaryTag, xrayPrefix, tcpLoopbackTag),
+            buildLeastLoadBalancer(udpPrimaryTag, hysteriaPrefix, udpLoopbackTag),
+            buildLeastLoadBalancer(tcpFallbackTag, hysteriaPrefix, 'block'),
+            buildLeastLoadBalancer(udpFallbackTag, xrayPrefix, 'block'),
+        ],
+        loopbackOutbounds: [
+            {
+                protocol: 'loopback',
+                settings: { inboundTag: tcpFallbackInboundTag },
+                tag: tcpLoopbackTag,
+            },
+            {
+                protocol: 'loopback',
+                settings: { inboundTag: udpFallbackInboundTag },
+                tag: udpLoopbackTag,
+            },
+        ],
+        loopbackRules: [
+            {
+                balancerTag: tcpFallbackTag,
+                inboundTag: [tcpFallbackInboundTag],
+                type: 'field',
+            },
+            {
+                balancerTag: udpFallbackTag,
+                inboundTag: [udpFallbackInboundTag],
+                type: 'field',
+            },
+        ],
+        proxyRules: [
+            {
+                balancerTag: udpPrimaryTag,
+                network: 'udp',
+                type: 'field',
+            },
+            {
+                balancerTag: tcpPrimaryTag,
+                network: 'tcp',
+                type: 'field',
+            },
+        ],
+        subjectSelectors: [xrayPrefix, hysteriaPrefix],
+    };
+}
+
+function buildSingleProtocolTopology(
+    tagBase: string,
+    protocolTag: 'xray' | 'hy2',
+    selectorPrefix: string,
+): ResolvedTopology {
+    const balancerTag = `balancer_${tagBase}_${protocolTag}_only`;
+
+    return {
+        balancers: [buildLeastLoadBalancer(balancerTag, selectorPrefix, 'block')],
+        loopbackOutbounds: [],
+        loopbackRules: [],
+        proxyRules: [
+            {
+                balancerTag,
+                network: 'udp',
+                type: 'field',
+            },
+            {
+                balancerTag,
+                network: 'tcp',
+                type: 'field',
+            },
+        ],
+        subjectSelectors: [selectorPrefix],
+    };
+}
+
+function buildLeastLoadBalancer(
+    tag: string,
+    selectorPrefix: string,
+    fallbackTag: string,
+): NonNullable<HappXrayConfig['routing']['balancers']>[number] {
+    return {
+        fallbackTag,
+        selector: [selectorPrefix],
+        strategy: {
+            settings: {
+                baselines: ['200ms', '500ms'],
+                expected: 7,
+                maxRTT: '2500ms',
+                tolerance: 0,
+            },
+            type: 'leastLoad',
+        },
+        tag,
+    };
+}
+
+function buildDns(): HappXrayConfig['dns'] {
+    return {
+        disableFallbackIfMatch: true,
+        enableParallelQuery: true,
+        queryStrategy: 'UseIPv4',
+        servers: [
+            {
+                address: '77.88.8.8',
+                domains: RUSSIAN_DNS_DOMAINS,
+            },
+            {
+                address: '77.88.8.1',
+                domains: RUSSIAN_DNS_DOMAINS,
+            },
+            'https://8.8.8.8/dns-query',
+            'https://8.8.4.4/dns-query',
+        ],
+    };
+}
+
+function buildDirectRoutingRules(groupName: string): HappXrayConfig['routing']['rules'] {
+    const directRussianResourceRules = isRussianProfile({ groupName })
         ? []
         : [
               {
@@ -128,77 +368,27 @@ function buildProfileConfig(group: HappGroup, options: HappXrayGeneratorOptions)
               },
           ];
 
-    return {
-        ...(hasBalancer
-            ? {
-                  burstObservatory: {
-                      pingConfig: options.burstObservatoryPingConfig,
-                      subjectSelector: [group.selectorPrefix],
-                  },
-              }
-            : {}),
-        dns: {
-            disableFallbackIfMatch: true,
-            enableParallelQuery: true,
-            queryStrategy: 'UseIPv4',
-            servers: [
-                {
-                    address: '77.88.8.8',
-                    domains: RUSSIAN_DNS_DOMAINS,
-                },
-                {
-                    address: '77.88.8.1',
-                    domains: RUSSIAN_DNS_DOMAINS,
-                },
-                'https://8.8.8.8/dns-query',
-                'https://8.8.4.4/dns-query',
-            ],
+    return [
+        {
+            outboundTag: 'direct',
+            protocol: ['bittorrent'],
+            type: 'field',
         },
-        inbounds: buildInbounds(),
-        outbounds: [...proxyOutbounds, buildDirectOutbound(), buildBlockOutbound()],
-        remarks: group.groupName,
-        routing: {
-            ...(hasBalancer
-                ? {
-                      balancers: [
-                          {
-                              fallbackTag: proxyTags[0],
-                              selector: [group.selectorPrefix],
-                              strategy: {
-                                  settings: {
-                                      baselines: ['200ms', '500ms'],
-                                      expected: 7,
-                                      maxRTT: '2500ms',
-                                      tolerance: 0,
-                                  },
-                                  type: 'leastLoad' as const,
-                              },
-                              tag: group.balancerTag,
-                          },
-                      ],
-                  }
-                : {}),
-            domainMatcher: 'hybrid',
-            domainStrategy: 'IPIfNonMatch',
-            rules: [
-                {
-                    outboundTag: 'direct',
-                    protocol: ['bittorrent'],
-                    type: 'field',
-                },
-                {
-                    ip: YANDEX_DNS_DIRECT_IPS,
-                    outboundTag: 'direct',
-                    type: 'field',
-                },
-                ...directRussianResourceRules,
-                proxyRule,
-            ],
+        {
+            domain: PUBLIC_TRACKER_DOMAINS,
+            outboundTag: 'direct',
+            type: 'field',
         },
-    };
+        {
+            ip: YANDEX_DNS_DIRECT_IPS,
+            outboundTag: 'direct',
+            type: 'field',
+        },
+        ...directRussianResourceRules,
+    ];
 }
 
-function isRussianProfile(group: HappGroup): boolean {
+function isRussianProfile(group: Pick<HappGroup, 'groupName'>): boolean {
     return group.groupName
         .replace(/\uFE0F/g, '')
         .trim()

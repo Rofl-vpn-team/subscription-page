@@ -15,11 +15,23 @@ import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
-import { buildGroupedHappXrayConfigs, parseHappVlessLine } from './happ-xray';
-import type { HappXrayBurstObservatoryPingConfig } from './happ-xray';
+import type {
+    HappHysteriaRolloutConfig,
+    HappResolvedGroup,
+    HappXrayBurstObservatoryPingConfig,
+} from './happ-xray';
+
+import {
+    buildGroupedHappXrayConfigs,
+    buildResolvedHappXrayConfigs,
+    isHappHysteriaSelected,
+    parseHappVlessLine,
+    parseHappXrayCarrier,
+} from './happ-xray';
 import { SubpageConfigService } from './subpage-config.service';
 
 const MIHOMO_CLIENT_TYPE = 'mihomo' as const satisfies TRequestTemplateTypeKeys;
+const XRAY_JSON_CLIENT_TYPE = 'v2ray-json' as const satisfies TRequestTemplateTypeKeys;
 
 interface RemnawaveDescriptionMetadata {
     role: string;
@@ -42,6 +54,7 @@ export class RootService {
 
     private readonly happXrayGroupedConfigEnabled: boolean;
     private readonly happXrayBurstObservatoryPingConfig: HappXrayBurstObservatoryPingConfig;
+    private readonly happXrayHysteriaRolloutConfig: HappHysteriaRolloutConfig;
     private readonly happXrayWhitelistSuffix: string;
     private readonly isMarzbanLegacyLinkEnabled: boolean;
     private readonly marzbanSecretKeys: string[];
@@ -67,6 +80,15 @@ export class RootService {
             interval: this.configService.getOrThrow('HAPP_XRAY_BURST_OBSERVATORY_INTERVAL'),
             sampling: this.configService.getOrThrow('HAPP_XRAY_BURST_OBSERVATORY_SAMPLING'),
             timeout: this.configService.getOrThrow('HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT'),
+        };
+        this.happXrayHysteriaRolloutConfig = {
+            allowlist: this.configService
+                .getOrThrow('HAPP_XRAY_HYSTERIA_ALLOWLIST')
+                .split(',')
+                .map((value) => value.trim())
+                .filter((value) => value.length > 0),
+            mode: this.configService.getOrThrow('HAPP_XRAY_HYSTERIA_ROLLOUT_MODE'),
+            percentage: this.configService.getOrThrow('HAPP_XRAY_HYSTERIA_ROLLOUT_PERCENT'),
         };
         this.happXrayWhitelistSuffix = this.configService.getOrThrow('HAPP_XRAY_WHITELIST_SUFFIX');
 
@@ -175,6 +197,80 @@ export class RootService {
     }
 
     public async serveAggregatedHappConfig(
+        clientIp: string,
+        req: Request,
+        res: Response,
+        mainShortUuid: string,
+    ): Promise<void> {
+        if (!isHappHysteriaSelected(mainShortUuid, this.happXrayHysteriaRolloutConfig)) {
+            return await this.serveLegacyAggregatedHappConfig(clientIp, req, res, mainShortUuid);
+        }
+
+        try {
+            return await this.serveResolvedAggregatedHappConfig(clientIp, req, res, mainShortUuid);
+        } catch (error) {
+            this.logger.warn(
+                `event=happ_hysteria_generation_fallback errorClass=${this.getSafeErrorClass(error)}`,
+            );
+
+            return await this.serveLegacyAggregatedHappConfig(clientIp, req, res, mainShortUuid);
+        }
+    }
+
+    private async serveResolvedAggregatedHappConfig(
+        clientIp: string,
+        req: Request,
+        res: Response,
+        mainShortUuid: string,
+    ): Promise<void> {
+        const mainResponse = await this.axiosService.getSubscription(
+            clientIp,
+            mainShortUuid,
+            req.headers,
+            true,
+            XRAY_JSON_CLIENT_TYPE,
+        );
+
+        if (!mainResponse) {
+            throw new Error('HAPP XRAY_JSON main carrier is unavailable.');
+        }
+
+        const mainGroups = parseHappXrayCarrier(mainResponse.response, {
+            tier: 'MAIN',
+            whitelistSuffix: this.happXrayWhitelistSuffix,
+        });
+        const fallbackLookupResult = await this.getFallbackLookupResult(clientIp, mainShortUuid);
+        let fallbackGroups: HappResolvedGroup[] = [];
+
+        if (fallbackLookupResult.fallbackShortUuid) {
+            const fallbackResponse = await this.axiosService.getSubscription(
+                clientIp,
+                fallbackLookupResult.fallbackShortUuid,
+                req.headers,
+                true,
+                XRAY_JSON_CLIENT_TYPE,
+            );
+
+            if (fallbackResponse) {
+                fallbackGroups = parseHappXrayCarrier(fallbackResponse.response, {
+                    tier: 'WL',
+                    whitelistSuffix: this.happXrayWhitelistSuffix,
+                });
+            }
+        }
+
+        const configs = buildResolvedHappXrayConfigs([...mainGroups, ...fallbackGroups], {
+            burstObservatoryPingConfig: this.happXrayBurstObservatoryPingConfig,
+            whitelistSuffix: this.happXrayWhitelistSuffix,
+        });
+
+        this.setProxyHeaders(res, mainResponse.headers);
+        this.applyNoCacheHeaders(res);
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.status(200).send(JSON.stringify(configs));
+    }
+
+    private async serveLegacyAggregatedHappConfig(
         clientIp: string,
         req: Request,
         res: Response,
@@ -311,6 +407,14 @@ export class RootService {
         return String(error);
     }
 
+    private getSafeErrorClass(error: unknown): string {
+        if (error instanceof Error) {
+            return error.constructor.name;
+        }
+
+        return typeof error;
+    }
+
     public async serveSubscriptionPage(
         clientIp: string,
         req: Request,
@@ -440,7 +544,7 @@ export class RootService {
         );
 
         if (!mainUserResponse.isOk || !mainUserResponse.response) {
-            this.logger.warn(`Main Remnawave user ${mainShortUuid} not found.`);
+            this.logger.warn('Main Remnawave user lookup failed.');
             return {
                 isMainFound: false,
                 fallbackShortUuid: null,
@@ -448,7 +552,6 @@ export class RootService {
         }
 
         const fallbackShortUuid = this.parseFallbackShortUuid(
-            mainShortUuid,
             mainUserResponse.response.description,
         );
 
@@ -465,9 +568,7 @@ export class RootService {
         );
 
         if (!fallbackUserResponse.isOk || !fallbackUserResponse.response) {
-            this.logger.warn(
-                `Fallback Remnawave user ${fallbackShortUuid} for main ${mainShortUuid} not found.`,
-            );
+            this.logger.warn('Fallback Remnawave user lookup failed.');
             return {
                 isMainFound: true,
                 fallbackShortUuid: null,
@@ -480,29 +581,22 @@ export class RootService {
         };
     }
 
-    private parseFallbackShortUuid(
-        mainShortUuid: string,
-        description: string | null,
-    ): string | null {
+    private parseFallbackShortUuid(description: string | null): string | null {
         if (!description) {
-            this.logger.debug(`Main Remnawave user ${mainShortUuid} has empty description.`);
+            this.logger.debug('Main Remnawave user has empty description.');
             return null;
         }
 
         let parsed: unknown;
         try {
             parsed = JSON.parse(description);
-        } catch (error) {
-            this.logger.warn(
-                `Main Remnawave user ${mainShortUuid} has invalid description JSON: ${error}`,
-            );
+        } catch {
+            this.logger.warn('Main Remnawave user has invalid description JSON.');
             return null;
         }
 
         if (!this.isMainMetadataWithFallback(parsed)) {
-            this.logger.debug(
-                `Main Remnawave user ${mainShortUuid} description has no fallbackShortUuid.`,
-            );
+            this.logger.debug('Main Remnawave user description has no fallbackShortUuid.');
             return null;
         }
 
