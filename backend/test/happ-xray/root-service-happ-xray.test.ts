@@ -228,6 +228,32 @@ test('serveAggregatedHappConfig uses resolved Xray JSON for an allowlisted Hyste
     assert.doesNotMatch(logger.output.join('\n'), /11111111-1111-4111-8111-111111111111/);
 });
 
+test('AxiosService forwards Happ HWID as x-hwid to Remnawave subscriptions', async () => {
+    const service = new AxiosService(
+        new StubConfigService({
+            REMNAWAVE_API_TOKEN: 'token',
+            REMNAWAVE_PANEL_URL: 'https://panel.example',
+        }) as never,
+    );
+    let capturedHeaders: Record<string, unknown> = {};
+
+    service.axiosInstance.request = (async (config: { headers?: Record<string, unknown> }) => {
+        capturedHeaders = config.headers ?? {};
+        return { data: [], headers: {} };
+    }) as never;
+
+    await service.getSubscription(
+        '127.0.0.1',
+        'main-short',
+        { hwid: 'happ-device-id', 'user-agent': 'Happ/2.17.1' },
+        true,
+        'v2ray-json',
+    );
+
+    assert.equal(capturedHeaders['x-hwid'], 'happ-device-id');
+    assert.equal(capturedHeaders.hwid, undefined);
+});
+
 test('serveAggregatedHappConfig atomically falls back to raw Xray when a carrier is malformed', async () => {
     const { axios, logger, res, service } = createService(
         {
@@ -375,6 +401,32 @@ test('serveAggregatedMihomoConfig stays Mihomo-only when Happ Hysteria rollout i
     assert.match(res.body as string, /main-provider:/);
     assert.match(res.body as string, /fallback-provider:/);
     assert.doesNotMatch(res.body as string, /hysteria|hy2/i);
+});
+
+test('serveAggregatedMihomoConfig carries Happ HWID into provider headers', async () => {
+    const { res, service } = createService(
+        { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
+        {
+            mainMihomoPayload: [
+                'proxies: []',
+                'proxy-groups:',
+                '  - name: VPN',
+                '    type: select',
+                '    use:',
+                '      - main-provider',
+                '      - fallback-provider',
+            ].join('\n'),
+        },
+    );
+
+    await service.serveAggregatedMihomoConfig(
+        '127.0.0.1',
+        createReq({ hwid: 'happ-device-id' }),
+        res as never,
+        'main-short',
+    );
+
+    assert.match(res.body as string, /x-hwid:\n\s+- happ-device-id/);
 });
 
 test('configSchema parses Happ Xray defaults and string values', () => {
@@ -592,9 +644,9 @@ function createService(
     return { axios, logger, res: createRes(), service };
 }
 
-function createReq() {
+function createReq(headers: NodeJS.Dict<string | string[]> = {}) {
     return {
-        headers: {},
+        headers,
     } as never;
 }
 

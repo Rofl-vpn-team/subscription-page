@@ -697,7 +697,7 @@ export class RootService {
     }
 
     private getHwidHeader(req: Request): string[] | undefined {
-        const header = req.headers['x-hwid'] ?? req.headers['X-HWID'];
+        const header = req.headers['x-hwid'] ?? req.headers.hwid;
 
         if (!header) {
             return undefined;

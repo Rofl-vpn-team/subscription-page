@@ -334,6 +334,12 @@ export class AxiosService implements OnModuleInit {
             const safeHeaders = Object.fromEntries(
                 Object.entries(headers).filter(([key]) => !IGNORED_HEADERS.has(key.toLowerCase())),
             );
+            const happHwid = safeHeaders.hwid;
+
+            if (happHwid !== undefined && safeHeaders['x-hwid'] === undefined) {
+                safeHeaders['x-hwid'] = happHwid;
+            }
+            delete safeHeaders.hwid;
 
             const response = await this.axiosInstance.request<unknown>({
                 method: 'GET',
