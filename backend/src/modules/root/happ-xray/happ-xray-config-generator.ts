@@ -2,6 +2,7 @@ import {
     HappGroup,
     HappParsedVlessLink,
     HappResolvedGroup,
+    HappResolvedProxyOutbound,
     HappXrayConfig,
     HappXrayGeneratorOptions,
     HappXrayOutbound,
@@ -166,10 +167,9 @@ function buildResolvedProfileConfig(
     const hysteriaPrefix = `out_${tagBase}_hy2_`;
     const xrayOutbounds = group.candidates
         .filter((candidate) => candidate.protocol === 'vless')
-        .map((candidate, index) => ({
-            ...candidate.outbound,
-            tag: `${xrayPrefix}${index + 1}`,
-        }));
+        .map((candidate, index) =>
+            normalizeResolvedVlessOutbound(candidate.outbound, `${xrayPrefix}${index + 1}`),
+        );
     const hysteriaOutbounds = group.candidates
         .filter((candidate) => candidate.protocol === 'hysteria')
         .map((candidate, index) => ({
@@ -428,6 +428,7 @@ function buildInbounds(): HappXrayConfig['inbounds'] {
 function buildProxyOutbound(tag: string, link: HappParsedVlessLink): HappXrayProxyOutbound {
     const realitySettings = buildRealitySettings(tag, link);
     const network = link.query.type ?? 'raw';
+    const flow = normalizeHappVlessFlow(link.query.flow);
 
     if (network !== 'raw' && network !== 'tcp') {
         throw new Error(
@@ -449,7 +450,7 @@ function buildProxyOutbound(tag: string, link: HappParsedVlessLink): HappXrayPro
                     users: [
                         {
                             encryption: link.query.encryption ?? 'none',
-                            ...(link.query.flow ? { flow: link.query.flow } : {}),
+                            ...(typeof flow === 'string' && flow.length > 0 ? { flow } : {}),
                             id: link.id,
                             level: 8,
                         },
@@ -473,6 +474,52 @@ function buildProxyOutbound(tag: string, link: HappParsedVlessLink): HappXrayPro
         },
         tag,
     };
+}
+
+function normalizeResolvedVlessOutbound(
+    outbound: HappResolvedProxyOutbound,
+    tag: string,
+): HappResolvedProxyOutbound {
+    const vnext = outbound.settings.vnext as unknown[];
+
+    return {
+        ...outbound,
+        settings: {
+            ...outbound.settings,
+            vnext: vnext.map((server) => {
+                if (server === null || typeof server !== 'object' || Array.isArray(server)) {
+                    return server;
+                }
+
+                const serverRecord = server as Record<string, unknown>;
+
+                if (!Array.isArray(serverRecord.users)) {
+                    return { ...serverRecord };
+                }
+
+                return {
+                    ...serverRecord,
+                    users: serverRecord.users.map((user) => {
+                        if (user === null || typeof user !== 'object' || Array.isArray(user)) {
+                            return user;
+                        }
+
+                        const userRecord = user as Record<string, unknown>;
+                        const flow = normalizeHappVlessFlow(userRecord.flow);
+
+                        return flow === userRecord.flow
+                            ? { ...userRecord }
+                            : { ...userRecord, flow };
+                    }),
+                };
+            }),
+        },
+        tag,
+    };
+}
+
+function normalizeHappVlessFlow(flow: unknown): unknown {
+    return flow === 'xtls-rprx-vision' ? 'xtls-rprx-vision-udp443' : flow;
 }
 
 function buildDirectOutbound(): HappXrayOutbound {
