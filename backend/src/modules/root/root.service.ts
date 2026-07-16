@@ -575,6 +575,14 @@ export class RootService {
             };
         }
 
+        if (fallbackUserResponse.response.status !== 'ACTIVE') {
+            this.logger.debug('Fallback Remnawave user is not active; excluding it from merge.');
+            return {
+                isMainFound: true,
+                fallbackShortUuid: null,
+            };
+        }
+
         return {
             isMainFound: true,
             fallbackShortUuid,
