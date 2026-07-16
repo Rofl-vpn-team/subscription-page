@@ -60,6 +60,31 @@ test('serveAggregatedHappConfig returns grouped Happ JSON config collection when
     );
 });
 
+test('serveAggregatedHappConfig omits a disabled fallback instead of merging technical hosts', async () => {
+    const subscriptionDisabled = FALLBACK_LINK.replace(/#.*$/, '#Subscription%20disabled');
+    const contactSupport = FALLBACK_LINK.replace(/#.*$/, '#Contact%20support');
+    const { axios, res, service } = createService(
+        { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
+        {
+            fallbackPayload: encodeLines([subscriptionDisabled, contactSupport]),
+            fallbackStatus: 'DISABLED',
+        },
+    );
+
+    await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
+    assert.deepEqual(
+        JSON.parse(res.body as string).map((config: { remarks: string }) => config.remarks),
+        ['⚡ Авто'],
+    );
+    assert.deepEqual(
+        axios.subscriptionCalls.map(({ shortUuid }) => shortUuid),
+        ['main-short'],
+    );
+});
+
 test('serveAggregatedHappConfig applies custom burst observatory ping config', async () => {
     const { res, service } = createService({
         HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: 'https://connect.example/204',
@@ -584,6 +609,7 @@ function createService(
     subscriptionOverrides: {
         fallbackPayload?: string | null;
         fallbackShortUuid?: string | null;
+        fallbackStatus?: 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'LIMITED';
         fallbackXrayJsonPayload?: unknown | null;
         mainPayload?: string;
         mainMihomoPayload?: unknown;
@@ -617,6 +643,7 @@ function createService(
             subscriptionOverrides.fallbackShortUuid === undefined
                 ? 'fallback-short'
                 : subscriptionOverrides.fallbackShortUuid,
+        fallbackStatus: subscriptionOverrides.fallbackStatus ?? 'ACTIVE',
         fallbackXrayJsonPayload:
             subscriptionOverrides.fallbackXrayJsonPayload === undefined
                 ? createCarrier('⚡ Авто 2', 'fallback')
@@ -705,6 +732,7 @@ class StubAxiosService {
         private readonly payloads: {
             fallbackPayload: string | null;
             fallbackShortUuid: string | null;
+            fallbackStatus: 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'LIMITED';
             fallbackXrayJsonPayload: unknown | null;
             mainPayload: string;
             mainMihomoPayload: unknown;
@@ -765,7 +793,10 @@ class StubAxiosService {
 
         return {
             isOk: true,
-            response: { description: null },
+            response: {
+                description: null,
+                status: this.payloads.fallbackStatus,
+            },
         };
     }
 }
