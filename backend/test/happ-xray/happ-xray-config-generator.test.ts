@@ -247,7 +247,7 @@ test('buildGroupedHappXrayConfigs maps VLESS REALITY fields into Happ-compatible
             users: [
                 {
                     encryption: 'none',
-                    flow: 'xtls-rprx-vision',
+                    flow: 'xtls-rprx-vision-udp443',
                     id: '11111111-1111-4111-8111-111111111111',
                     level: 8,
                 },
@@ -265,6 +265,20 @@ test('buildGroupedHappXrayConfigs maps VLESS REALITY fields into Happ-compatible
         show: false,
     });
     assert.equal('password' in outbound.streamSettings.realitySettings!, false);
+});
+
+test('buildGroupedHappXrayConfigs preserves an absent VLESS flow', () => {
+    const configs = buildGroupedHappXrayConfigs(
+        [parseHappVlessLine(WL_AUTO)],
+        DEFAULT_GENERATOR_OPTIONS,
+    );
+    const outbound = configs[0].outbounds[0];
+
+    assert.equal(outbound.protocol, 'vless');
+    const settings = outbound.settings as {
+        vnext: Array<{ users: Array<{ flow?: string }> }>;
+    };
+    assert.equal('flow' in settings.vnext[0].users[0], false);
 });
 
 test('buildGroupedHappXrayConfigs accepts tcp VLESS transport from Remnawave links', () => {
@@ -367,6 +381,50 @@ test('buildResolvedHappXrayConfigs routes TCP to Xray and UDP to Hysteria with o
             type: 'field',
         },
     ]);
+});
+
+test('buildResolvedHappXrayConfigs allows UDP/443 without mutating the carrier', () => {
+    const source: HappResolvedGroup = {
+        candidates: [
+            {
+                identity: 'vless-with-vision',
+                outbound: {
+                    protocol: 'vless',
+                    settings: {
+                        vnext: [
+                            {
+                                address: 'auto.example',
+                                port: 443,
+                                users: [
+                                    {
+                                        flow: 'xtls-rprx-vision',
+                                        id: '11111111-1111-4111-8111-111111111111',
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    streamSettings: { network: 'raw', security: 'reality' },
+                    tag: 'source-vless',
+                },
+                protocol: 'vless',
+            },
+        ],
+        groupName: '⚡ Авто',
+        tier: 'MAIN',
+    };
+
+    const config = buildResolvedHappXrayConfigs([source], DEFAULT_GENERATOR_OPTIONS)[0];
+    const generated = config.outbounds.find((outbound) => outbound.protocol === 'vless');
+    const generatedSettings = generated?.settings as {
+        vnext: Array<{ users: Array<{ flow?: string }> }>;
+    };
+    const sourceSettings = source.candidates[0].outbound.settings as {
+        vnext: Array<{ users: Array<{ flow?: string }> }>;
+    };
+
+    assert.equal(generatedSettings.vnext[0].users[0].flow, 'xtls-rprx-vision-udp443');
+    assert.equal(sourceSettings.vnext[0].users[0].flow, 'xtls-rprx-vision');
 });
 
 test('buildResolvedHappXrayConfigs uses one fail-closed Xray balancer when Hysteria is absent', () => {
