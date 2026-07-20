@@ -27,6 +27,7 @@ const DEFAULT_GENERATOR_OPTIONS = {
         sampling: 3,
         timeout: '3s',
     },
+    hysteriaSalamanderPassword: '',
     whitelistSuffix: ' [White Cipher]',
 };
 
@@ -63,6 +64,7 @@ test('buildGroupedHappXrayConfigs uses supplied burst observatory ping config', 
             sampling: 7,
             timeout: '1200ms',
         },
+        hysteriaSalamanderPassword: '',
         whitelistSuffix: ' [White Cipher]',
     });
 
@@ -425,6 +427,51 @@ test('buildResolvedHappXrayConfigs allows UDP/443 without mutating the carrier',
 
     assert.equal(generatedSettings.vnext[0].users[0].flow, 'xtls-rprx-vision-udp443');
     assert.equal(sourceSettings.vnext[0].users[0].flow, 'xtls-rprx-vision');
+});
+
+test('buildResolvedHappXrayConfigs applies Salamander only to Hysteria without mutating the carrier', () => {
+    const source = resolvedGroup('MAIN', '⚡ Авто', ['vless', 'hysteria']);
+    const sourceSnapshot = structuredClone(source);
+
+    const config = buildResolvedHappXrayConfigs([source], {
+        ...DEFAULT_GENERATOR_OPTIONS,
+        hysteriaSalamanderPassword: 'dev-salamander-password',
+    })[0];
+    const hysteria = config.outbounds.find((outbound) => outbound.protocol === 'hysteria');
+    const vless = config.outbounds.find((outbound) => outbound.protocol === 'vless');
+
+    assert.deepEqual(hysteria?.streamSettings.finalmask, {
+        udp: [
+            {
+                settings: { password: 'dev-salamander-password' },
+                type: 'salamander',
+            },
+        ],
+    });
+    assert.equal('finalmask' in (vless?.streamSettings ?? {}), false);
+    assert.deepEqual(source, sourceSnapshot);
+});
+
+test('buildResolvedHappXrayConfigs replaces carrier FinalMask on Hysteria with the deployment password', () => {
+    const source = resolvedGroup('MAIN', '⚡ Авто', ['hysteria']);
+    source.candidates[0].outbound.streamSettings.finalmask = {
+        udp: [{ type: 'salamander', settings: { password: 'carrier-password' } }],
+    };
+
+    const config = buildResolvedHappXrayConfigs([source], {
+        ...DEFAULT_GENERATOR_OPTIONS,
+        hysteriaSalamanderPassword: 'deployment-password',
+    })[0];
+    const hysteria = config.outbounds.find((outbound) => outbound.protocol === 'hysteria');
+
+    assert.deepEqual(hysteria?.streamSettings.finalmask, {
+        udp: [
+            {
+                settings: { password: 'deployment-password' },
+                type: 'salamander',
+            },
+        ],
+    });
 });
 
 test('buildResolvedHappXrayConfigs uses one fail-closed Xray balancer when Hysteria is absent', () => {

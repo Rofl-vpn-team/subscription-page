@@ -32,6 +32,7 @@ export interface HappXrayBurstObservatoryPingConfig {
 
 export interface HappXrayGeneratorOptions {
     burstObservatoryPingConfig: HappXrayBurstObservatoryPingConfig;
+    hysteriaSalamanderPassword: string;
     whitelistSuffix: string;
 }
 

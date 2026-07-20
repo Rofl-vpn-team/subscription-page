@@ -202,6 +202,7 @@ test('serveAggregatedHappConfig uses resolved Xray JSON for an allowlisted Hyste
             HAPP_XRAY_GROUPED_CONFIG_ENABLED: true,
             HAPP_XRAY_HYSTERIA_ALLOWLIST: ' main-short ',
             HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: 'allowlist',
+            HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD: 'dev-salamander-password',
         },
         {
             fallbackXrayJsonPayload: createCarrier('⚡ Авто 2', 'fallback'),
@@ -231,6 +232,19 @@ test('serveAggregatedHappConfig uses resolved Xray JSON for an allowlisted Hyste
         configs.map((config: { remarks: string }) => config.remarks),
         ['⚡ Авто', '⚡ Авто [White Cipher]'],
     );
+    const hysteria = configs
+        .flatMap((config: { outbounds: Array<Record<string, unknown>> }) => config.outbounds)
+        .find((outbound: { protocol?: unknown }) => outbound.protocol === 'hysteria') as {
+        streamSettings: { finalmask?: unknown };
+    };
+    assert.deepEqual(hysteria.streamSettings.finalmask, {
+        udp: [
+            {
+                settings: { password: 'dev-salamander-password' },
+                type: 'salamander',
+            },
+        ],
+    });
     for (const config of configs) {
         assert.equal(
             config.routing.rules.some(
@@ -467,6 +481,7 @@ test('configSchema parses Happ Xray defaults and string values', () => {
     assert.equal(defaultValues.HAPP_XRAY_HYSTERIA_ALLOWLIST, '');
     assert.equal(defaultValues.HAPP_XRAY_HYSTERIA_ROLLOUT_MODE, 'off');
     assert.equal(defaultValues.HAPP_XRAY_HYSTERIA_ROLLOUT_PERCENT, 0);
+    assert.equal(defaultValues.HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD, '');
     assert.equal(defaultValues.HAPP_XRAY_OBSERVATORY_URL, 'https://www.gstatic.com/generate_204');
     assert.equal(defaultValues.HAPP_XRAY_WHITELIST_SUFFIX, ' [White Cipher]');
     assert.equal(defaultValues.HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY, '');
@@ -488,6 +503,7 @@ test('configSchema parses Happ Xray defaults and string values', () => {
         HAPP_XRAY_HYSTERIA_ALLOWLIST: 'main-short, another-short',
         HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: 'percentage',
         HAPP_XRAY_HYSTERIA_ROLLOUT_PERCENT: '25',
+        HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD: 'dev-salamander-password',
         HAPP_XRAY_OBSERVATORY_URL: 'http://probe.example/status',
         HAPP_XRAY_WHITELIST_SUFFIX: ' [Allow]',
         INTERNAL_JWT_SECRET: 'secret',
@@ -501,6 +517,7 @@ test('configSchema parses Happ Xray defaults and string values', () => {
     assert.equal(enabledValues.HAPP_XRAY_HYSTERIA_ALLOWLIST, 'main-short, another-short');
     assert.equal(enabledValues.HAPP_XRAY_HYSTERIA_ROLLOUT_MODE, 'percentage');
     assert.equal(enabledValues.HAPP_XRAY_HYSTERIA_ROLLOUT_PERCENT, 25);
+    assert.equal(enabledValues.HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD, 'dev-salamander-password');
     assert.equal(enabledValues.HAPP_XRAY_OBSERVATORY_URL, 'http://probe.example/status');
     assert.equal(enabledValues.HAPP_XRAY_WHITELIST_SUFFIX, ' [Allow]');
     assert.equal(
@@ -561,6 +578,7 @@ test('configSchema parses Happ Xray defaults and string values', () => {
             configSchema.safeParse({
                 HAPP_XRAY_GROUPED_CONFIG_ENABLED: 'true',
                 HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: mode,
+                HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD: 'dev-salamander-password',
                 INTERNAL_JWT_SECRET: 'secret',
                 REMNAWAVE_API_TOKEN: 'token',
                 REMNAWAVE_PANEL_URL: 'https://panel.example',
@@ -582,6 +600,17 @@ test('configSchema parses Happ Xray defaults and string values', () => {
         );
     }
 
+    assert.equal(
+        configSchema.safeParse({
+            HAPP_XRAY_GROUPED_CONFIG_ENABLED: 'true',
+            HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: 'on',
+            HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD: '   ',
+            INTERNAL_JWT_SECRET: 'secret',
+            REMNAWAVE_API_TOKEN: 'token',
+            REMNAWAVE_PANEL_URL: 'https://panel.example',
+        }).success,
+        false,
+    );
     assert.equal(
         configSchema.safeParse({
             HAPP_XRAY_GROUPED_CONFIG_ENABLED: 'true',
@@ -627,6 +656,7 @@ function createService(
         HAPP_XRAY_HYSTERIA_ALLOWLIST: '',
         HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: 'off',
         HAPP_XRAY_HYSTERIA_ROLLOUT_PERCENT: 0,
+        HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD: '',
         HAPP_XRAY_OBSERVATORY_URL: 'https://www.gstatic.com/generate_204',
         HAPP_XRAY_WHITELIST_SUFFIX: ' [White Cipher]',
         MARZBAN_LEGACY_DROP_REVOKED_SUBSCRIPTIONS: false,

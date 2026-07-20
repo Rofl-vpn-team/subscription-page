@@ -65,6 +65,7 @@ export const configSchema = z
             .enum(['off', 'allowlist', 'percentage', 'on'])
             .default('off'),
         HAPP_XRAY_HYSTERIA_ROLLOUT_PERCENT: integerRangeString('0', 0, 100),
+        HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD: z.string().default(''),
         HAPP_XRAY_OBSERVATORY_URL: z.string().default('https://www.gstatic.com/generate_204'),
         HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: z.string().default(''),
         HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: optionalNonEmptyString(),
@@ -94,6 +95,17 @@ export const configSchema = z
                 message:
                     'HAPP_XRAY_GROUPED_CONFIG_ENABLED must be true when HAPP Xray Hysteria rollout is enabled.',
                 path: ['HAPP_XRAY_HYSTERIA_ROLLOUT_MODE'],
+            });
+        }
+        if (
+            data.HAPP_XRAY_HYSTERIA_ROLLOUT_MODE !== 'off' &&
+            data.HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD.trim().length === 0
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message:
+                    'HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD must be set when HAPP Xray Hysteria rollout is enabled.',
+                path: ['HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD'],
             });
         }
         if (

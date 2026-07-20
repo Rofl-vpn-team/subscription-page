@@ -172,10 +172,13 @@ function buildResolvedProfileConfig(
         );
     const hysteriaOutbounds = group.candidates
         .filter((candidate) => candidate.protocol === 'hysteria')
-        .map((candidate, index) => ({
-            ...candidate.outbound,
-            tag: `${hysteriaPrefix}${index + 1}`,
-        }));
+        .map((candidate, index) =>
+            normalizeResolvedHysteriaOutbound(
+                candidate.outbound,
+                `${hysteriaPrefix}${index + 1}`,
+                options.hysteriaSalamanderPassword,
+            ),
+        );
     const hasXray = xrayOutbounds.length > 0;
     const hasHysteria = hysteriaOutbounds.length > 0;
     const topology =
@@ -513,6 +516,32 @@ function normalizeResolvedVlessOutbound(
                     }),
                 };
             }),
+        },
+        tag,
+    };
+}
+
+function normalizeResolvedHysteriaOutbound(
+    outbound: HappResolvedProxyOutbound,
+    tag: string,
+    salamanderPassword: string,
+): HappResolvedProxyOutbound {
+    return {
+        ...outbound,
+        streamSettings: {
+            ...outbound.streamSettings,
+            ...(salamanderPassword.length > 0
+                ? {
+                      finalmask: {
+                          udp: [
+                              {
+                                  settings: { password: salamanderPassword },
+                                  type: 'salamander',
+                              },
+                          ],
+                      },
+                  }
+                : {}),
         },
         tag,
     };
