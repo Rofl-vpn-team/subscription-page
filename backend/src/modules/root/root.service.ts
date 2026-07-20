@@ -55,6 +55,7 @@ export class RootService {
     private readonly happXrayGroupedConfigEnabled: boolean;
     private readonly happXrayBurstObservatoryPingConfig: HappXrayBurstObservatoryPingConfig;
     private readonly happXrayHysteriaRolloutConfig: HappHysteriaRolloutConfig;
+    private readonly happXrayHysteriaSalamanderPassword: string;
     private readonly happXrayWhitelistSuffix: string;
     private readonly isMarzbanLegacyLinkEnabled: boolean;
     private readonly marzbanSecretKeys: string[];
@@ -90,6 +91,9 @@ export class RootService {
             mode: this.configService.getOrThrow('HAPP_XRAY_HYSTERIA_ROLLOUT_MODE'),
             percentage: this.configService.getOrThrow('HAPP_XRAY_HYSTERIA_ROLLOUT_PERCENT'),
         };
+        this.happXrayHysteriaSalamanderPassword = this.configService.getOrThrow(
+            'HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD',
+        );
         this.happXrayWhitelistSuffix = this.configService.getOrThrow('HAPP_XRAY_WHITELIST_SUFFIX');
 
         const marzbanSecretKeys = this.configService.get('MARZBAN_LEGACY_SECRET_KEY');
@@ -261,6 +265,7 @@ export class RootService {
 
         const configs = buildResolvedHappXrayConfigs([...mainGroups, ...fallbackGroups], {
             burstObservatoryPingConfig: this.happXrayBurstObservatoryPingConfig,
+            hysteriaSalamanderPassword: this.happXrayHysteriaSalamanderPassword,
             whitelistSuffix: this.happXrayWhitelistSuffix,
         });
 
@@ -375,6 +380,7 @@ export class RootService {
 
             const configs = buildGroupedHappXrayConfigs(lines.map(parseHappVlessLine), {
                 burstObservatoryPingConfig: this.happXrayBurstObservatoryPingConfig,
+                hysteriaSalamanderPassword: '',
                 whitelistSuffix: this.happXrayWhitelistSuffix,
             });
 
