@@ -75,18 +75,8 @@ export class RootController {
     }
 
     @Get('provider/fallback/:mainShortUuid')
-    async fallbackMihomoProvider(
-        @ClientIp() clientIp: string,
-        @Req() request: Request,
-        @Res() response: Response,
-        @Param('mainShortUuid') mainShortUuid: string,
-    ) {
-        return await this.rootService.serveFallbackMihomoProvider(
-            clientIp,
-            request,
-            response,
-            mainShortUuid,
-        );
+    async fallbackMihomoProvider(@Res() response: Response) {
+        return await this.rootService.serveFallbackMihomoProvider(response);
     }
 
     @Get([':shortUuid', ':shortUuid/:clientType'])
