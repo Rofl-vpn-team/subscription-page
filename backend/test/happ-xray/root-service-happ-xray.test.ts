@@ -11,19 +11,19 @@ import { RootService } from '@modules/root/root.service';
 
 const MAIN_LINK =
     'vless://11111111-1111-4111-8111-111111111111@main.example:443?encryption=none&flow=xtls-rprx-vision&type=raw&security=reality&sni=main.example&fp=firefox&pbk=PBK1&sid=1111111111111111#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%201';
-const FALLBACK_LINK =
+const SECOND_HOST_LINK =
     'vless://22222222-2222-4222-8222-222222222222@fallback.example:443?encryption=none&type=raw&security=reality&sni=fallback.example&fp=firefox&pbk=PBK2&sid=2222222222222222#%E2%9A%A1%20%D0%90%D0%B2%D1%82%D0%BE%202';
 const DEV_TCP_WHITE_CIPHER_LINK =
     'vless://22222222-2222-4222-8222-222222222222@85.198.97.235:443?encryption=none&flow=xtls-rprx-vision&type=tcp&security=reality&sni=ya.ru&fp=firefox&pbk=PBK2&sid=2222222222222222#%F0%9F%87%B3%F0%9F%87%B1%20%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B%201%20%5BWhite%20Cipher%5D%';
 const TEST_HYSTERIA_AUTH = '33333333-3333-4333-8333-333333333333';
 
-test('serveAggregatedHappConfig keeps base64 merge when grouped Xray flag is false', async () => {
+test('serveAggregatedHappConfig serves only the third-party account when grouped Xray flag is false', async () => {
     const { axios, res, service } = createService({ HAPP_XRAY_GROUPED_CONFIG_ENABLED: false });
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
 
     assert.equal(res.statusCode, 200);
-    assert.equal(res.body, encodeLines([MAIN_LINK, FALLBACK_LINK]));
+    assert.equal(res.body, encodeLines([MAIN_LINK]));
     assert.equal(res.headers['content-type'], 'text/plain');
     assert.deepEqual(
         axios.subscriptionCalls.map(({ clientType, shortUuid, withClientType }) => ({
@@ -31,15 +31,15 @@ test('serveAggregatedHappConfig keeps base64 merge when grouped Xray flag is fal
             shortUuid,
             withClientType,
         })),
-        [
-            { clientType: undefined, shortUuid: 'main-short', withClientType: false },
-            { clientType: undefined, shortUuid: 'fallback-short', withClientType: false },
-        ],
+        [{ clientType: undefined, shortUuid: 'main-short', withClientType: false }],
     );
 });
 
 test('serveAggregatedHappConfig returns grouped Happ JSON config collection when grouped Xray flag is true', async () => {
-    const { res, service } = createService({ HAPP_XRAY_GROUPED_CONFIG_ENABLED: true });
+    const { res, service } = createService(
+        { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
+        { mainPayload: encodeLines([MAIN_LINK, SECOND_HOST_LINK]) },
+    );
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
 
@@ -60,21 +60,12 @@ test('serveAggregatedHappConfig returns grouped Happ JSON config collection when
     );
 });
 
-test('serveAggregatedHappConfig omits a disabled fallback instead of merging technical hosts', async () => {
-    const subscriptionDisabled = FALLBACK_LINK.replace(/#.*$/, '#Subscription%20disabled');
-    const contactSupport = FALLBACK_LINK.replace(/#.*$/, '#Contact%20support');
-    const { axios, res, service } = createService(
-        { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
-        {
-            fallbackPayload: encodeLines([subscriptionDisabled, contactSupport]),
-            fallbackStatus: 'DISABLED',
-        },
-    );
+test('serveAggregatedHappConfig never looks up or merges the second account', async () => {
+    const { axios, res, service } = createService({ HAPP_XRAY_GROUPED_CONFIG_ENABLED: true });
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
 
     assert.equal(res.statusCode, 200);
-    assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
     assert.deepEqual(
         JSON.parse(res.body as string).map((config: { remarks: string }) => config.remarks),
         ['⚡ Авто'],
@@ -83,17 +74,21 @@ test('serveAggregatedHappConfig omits a disabled fallback instead of merging tec
         axios.subscriptionCalls.map(({ shortUuid }) => shortUuid),
         ['main-short'],
     );
+    assert.equal(axios.userLookups, 0);
 });
 
 test('serveAggregatedHappConfig applies custom burst observatory ping config', async () => {
-    const { res, service } = createService({
-        HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: 'https://connect.example/204',
-        HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: 'https://probe.example/204',
-        HAPP_XRAY_BURST_OBSERVATORY_INTERVAL: '45s',
-        HAPP_XRAY_BURST_OBSERVATORY_SAMPLING: 7,
-        HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT: '1200ms',
-        HAPP_XRAY_GROUPED_CONFIG_ENABLED: true,
-    });
+    const { res, service } = createService(
+        {
+            HAPP_XRAY_BURST_OBSERVATORY_CONNECTIVITY: 'https://connect.example/204',
+            HAPP_XRAY_BURST_OBSERVATORY_DESTINATION: 'https://probe.example/204',
+            HAPP_XRAY_BURST_OBSERVATORY_INTERVAL: '45s',
+            HAPP_XRAY_BURST_OBSERVATORY_SAMPLING: 7,
+            HAPP_XRAY_BURST_OBSERVATORY_TIMEOUT: '1200ms',
+            HAPP_XRAY_GROUPED_CONFIG_ENABLED: true,
+        },
+        { mainPayload: encodeLines([MAIN_LINK, SECOND_HOST_LINK]) },
+    );
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
 
@@ -109,20 +104,19 @@ test('serveAggregatedHappConfig applies custom burst observatory ping config', a
 });
 
 test('serveAggregatedHappConfig falls back to base64 when grouped Xray build fails', async () => {
-    const grpcFallback = FALLBACK_LINK.replace('&type=raw', '&type=grpc');
+    const grpcMain = MAIN_LINK.replace('&type=raw', '&type=grpc');
     const { logger, res, service } = createService(
         { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
-        { fallbackPayload: encodeLines([grpcFallback]) },
+        { mainPayload: encodeLines([MAIN_LINK, grpcMain]) },
     );
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
 
     assert.equal(res.statusCode, 200);
-    assert.equal(res.body, encodeLines([MAIN_LINK, grpcFallback]));
+    assert.equal(res.body, encodeLines([MAIN_LINK, grpcMain]));
     assert.equal(res.headers['content-type'], 'text/plain');
     assert.equal(logger.warns.length, 1);
     assert.doesNotMatch(logger.warns[0], /11111111-1111-4111-8111-111111111111/);
-    assert.doesNotMatch(logger.warns[0], /22222222-2222-4222-8222-222222222222/);
     assert.doesNotMatch(logger.warns[0], /PBK/);
 });
 
@@ -130,10 +124,7 @@ test('serveAggregatedHappConfig returns JSON for dev tcp links with malformed tr
     const tcpMain = MAIN_LINK.replace('&type=raw', '&type=tcp');
     const { logger, res, service } = createService(
         { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
-        {
-            fallbackPayload: encodeLines([DEV_TCP_WHITE_CIPHER_LINK]),
-            mainPayload: encodeLines([tcpMain]),
-        },
+        { mainPayload: encodeLines([tcpMain, DEV_TCP_WHITE_CIPHER_LINK]) },
     );
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
@@ -158,44 +149,6 @@ test('serveAggregatedHappConfig returns JSON for dev tcp links with malformed tr
     );
 });
 
-test('serveAggregatedHappConfig returns grouped Xray JSON when no fallback short uuid exists', async () => {
-    const { res, service } = createService(
-        { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
-        { fallbackShortUuid: null },
-    );
-
-    await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
-
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
-
-    const configs = JSON.parse(res.body as string);
-
-    assert.deepEqual(
-        configs.map((config: { remarks: string }) => config.remarks),
-        ['⚡ Авто'],
-    );
-});
-
-test('serveAggregatedHappConfig returns grouped Xray JSON when fallback subscription is unavailable', async () => {
-    const { res, service } = createService(
-        { HAPP_XRAY_GROUPED_CONFIG_ENABLED: true },
-        { fallbackPayload: null },
-    );
-
-    await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
-
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
-
-    const configs = JSON.parse(res.body as string);
-
-    assert.deepEqual(
-        configs.map((config: { remarks: string }) => config.remarks),
-        ['⚡ Авто'],
-    );
-});
-
 test('serveAggregatedHappConfig uses resolved Xray JSON for an allowlisted Hysteria cohort', async () => {
     const { axios, logger, res, service } = createService(
         {
@@ -204,10 +157,7 @@ test('serveAggregatedHappConfig uses resolved Xray JSON for an allowlisted Hyste
             HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: 'allowlist',
             HAPP_XRAY_HYSTERIA_SALAMANDER_PASSWORD: 'dev-salamander-password',
         },
-        {
-            fallbackXrayJsonPayload: createCarrier('⚡ Авто 2', 'fallback'),
-            mainXrayJsonPayload: createCarrier('⚡ Авто 1', 'main'),
-        },
+        { mainXrayJsonPayload: createCarrier('⚡ Авто 1', 'main') },
     );
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
@@ -220,17 +170,14 @@ test('serveAggregatedHappConfig uses resolved Xray JSON for an allowlisted Hyste
             shortUuid,
             withClientType,
         })),
-        [
-            { clientType: 'v2ray-json', shortUuid: 'main-short', withClientType: true },
-            { clientType: 'v2ray-json', shortUuid: 'fallback-short', withClientType: true },
-        ],
+        [{ clientType: 'v2ray-json', shortUuid: 'main-short', withClientType: true }],
     );
 
     const configs = JSON.parse(res.body as string);
 
     assert.deepEqual(
         configs.map((config: { remarks: string }) => config.remarks),
-        ['⚡ Авто', '⚡ Авто [White Cipher]'],
+        ['⚡ Авто'],
     );
     const hysteria = configs
         .flatMap((config: { outbounds: Array<Record<string, unknown>> }) => config.outbounds)
@@ -262,7 +209,7 @@ test('serveAggregatedHappConfig uses resolved Xray JSON for an allowlisted Hyste
         );
     }
 
-    assert.doesNotMatch(logger.output.join('\n'), /main-short|fallback-short/);
+    assert.doesNotMatch(logger.output.join('\n'), /main-short/);
     assert.doesNotMatch(logger.output.join('\n'), new RegExp(TEST_HYSTERIA_AUTH));
     assert.doesNotMatch(logger.output.join('\n'), /11111111-1111-4111-8111-111111111111/);
 });
@@ -300,10 +247,7 @@ test('serveAggregatedHappConfig atomically falls back to raw Xray when a carrier
             HAPP_XRAY_HYSTERIA_ALLOWLIST: 'main-short',
             HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: 'allowlist',
         },
-        {
-            fallbackXrayJsonPayload: [{ outbounds: [{ protocol: 'hysteria' }], remarks: 'bad' }],
-            mainXrayJsonPayload: createCarrier('⚡ Авто 1', 'main'),
-        },
+        { mainXrayJsonPayload: [{ outbounds: [{ protocol: 'hysteria' }], remarks: 'bad' }] },
     );
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
@@ -321,27 +265,24 @@ test('serveAggregatedHappConfig atomically falls back to raw Xray when a carrier
     );
     assert.deepEqual(
         axios.subscriptionCalls.map(({ clientType }) => clientType),
-        ['v2ray-json', 'v2ray-json', undefined, undefined],
+        ['v2ray-json', undefined],
     );
     assert.equal(
         logger.warns.some((message) => message.includes('event=happ_hysteria_generation_fallback')),
         true,
     );
-    assert.doesNotMatch(logger.output.join('\n'), /main-short|fallback-short/);
+    assert.doesNotMatch(logger.output.join('\n'), /main-short/);
     assert.doesNotMatch(logger.output.join('\n'), new RegExp(TEST_HYSTERIA_AUTH));
 });
 
-test('serveAggregatedHappConfig returns main-only resolved JSON when typed fallback is unavailable', async () => {
+test('serveAggregatedHappConfig requests only the third-party carrier for resolved JSON', async () => {
     const { axios, res, service } = createService(
         {
             HAPP_XRAY_GROUPED_CONFIG_ENABLED: true,
             HAPP_XRAY_HYSTERIA_ALLOWLIST: 'main-short',
             HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: 'allowlist',
         },
-        {
-            fallbackXrayJsonPayload: null,
-            mainXrayJsonPayload: createCarrier('⚡ Авто 1', 'main'),
-        },
+        { mainXrayJsonPayload: createCarrier('⚡ Авто 1', 'main') },
     );
 
     await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
@@ -354,28 +295,8 @@ test('serveAggregatedHappConfig returns main-only resolved JSON when typed fallb
     );
     assert.deepEqual(
         axios.subscriptionCalls.map(({ clientType }) => clientType),
-        ['v2ray-json', 'v2ray-json'],
+        ['v2ray-json'],
     );
-});
-
-test('serveAggregatedHappConfig redacts identifiers when fallback lookup is unavailable', async () => {
-    const { logger, res, service } = createService(
-        {
-            HAPP_XRAY_GROUPED_CONFIG_ENABLED: true,
-            HAPP_XRAY_HYSTERIA_ALLOWLIST: 'main-short',
-            HAPP_XRAY_HYSTERIA_ROLLOUT_MODE: 'allowlist',
-        },
-        {
-            mainUserFound: false,
-            mainXrayJsonPayload: createCarrier('⚡ Авто 1', 'main'),
-        },
-    );
-
-    await service.serveAggregatedHappConfig('127.0.0.1', createReq(), res as never, 'main-short');
-
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
-    assert.doesNotMatch(logger.output.join('\n'), /main-short|fallback-short/);
 });
 
 test('serveAggregatedHappConfig falls back to raw Xray when typed main is unavailable', async () => {
@@ -402,7 +323,7 @@ test('serveAggregatedHappConfig falls back to raw Xray when typed main is unavai
     );
     assert.deepEqual(
         axios.subscriptionCalls.map(({ clientType }) => clientType),
-        ['v2ray-json', undefined, undefined],
+        ['v2ray-json', undefined],
     );
 });
 
@@ -667,7 +588,7 @@ function createService(
     const axios = new StubAxiosService({
         fallbackPayload:
             subscriptionOverrides.fallbackPayload === undefined
-                ? encodeLines([FALLBACK_LINK])
+                ? encodeLines([SECOND_HOST_LINK])
                 : subscriptionOverrides.fallbackPayload,
         fallbackShortUuid:
             subscriptionOverrides.fallbackShortUuid === undefined
@@ -757,6 +678,7 @@ class StubConfigService {
 
 class StubAxiosService {
     public readonly subscriptionCalls: SubscriptionCall[] = [];
+    public userLookups = 0;
 
     public constructor(
         private readonly payloads: {
@@ -803,6 +725,7 @@ class StubAxiosService {
     }
 
     public async getUserByShortUuid(_clientIp: string, shortUuid: string) {
+        this.userLookups += 1;
         if (shortUuid === 'main-short') {
             if (!this.payloads.mainUserFound) {
                 return { isOk: false };

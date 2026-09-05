@@ -15,11 +15,7 @@ import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
-import type {
-    HappHysteriaRolloutConfig,
-    HappResolvedGroup,
-    HappXrayBurstObservatoryPingConfig,
-} from './happ-xray';
+import type { HappHysteriaRolloutConfig, HappXrayBurstObservatoryPingConfig } from './happ-xray';
 
 import {
     buildGroupedHappXrayConfigs,
@@ -32,19 +28,6 @@ import { SubpageConfigService } from './subpage-config.service';
 
 const MIHOMO_CLIENT_TYPE = 'mihomo' as const satisfies TRequestTemplateTypeKeys;
 const XRAY_JSON_CLIENT_TYPE = 'v2ray-json' as const satisfies TRequestTemplateTypeKeys;
-
-interface RemnawaveDescriptionMetadata {
-    role: string;
-    mainUuid?: string;
-    mainShortUuid?: string;
-    fallbackUuid?: string;
-    fallbackShortUuid?: string;
-}
-
-interface FallbackLookupResult {
-    isMainFound: boolean;
-    fallbackShortUuid: string | null;
-}
 
 type MihomoConfig = Record<string, unknown>;
 
@@ -125,23 +108,6 @@ export class RootService {
                 return;
             }
 
-            const fallbackLookupResult = await this.getFallbackLookupResult(
-                clientIp,
-                mainShortUuid,
-            );
-
-            if (!fallbackLookupResult.isMainFound) {
-                this.logger.warn(
-                    `Main Mihomo config exists, but Remnawave user lookup failed for ${mainShortUuid}; aggregating with fallback provider stubbed.`,
-                );
-            }
-
-            if (!fallbackLookupResult.fallbackShortUuid) {
-                this.logger.debug(
-                    `No fallbackShortUuid for ${mainShortUuid}; fallback-provider will be injected anyway and serve 404 (mihomo treats it as empty).`,
-                );
-            }
-
             const publicBaseUrl = this.getPublicBaseUrl(req);
             const encodedMainShortUuid = encodeURIComponent(mainShortUuid);
             const hwidHeader = this.getHwidHeader(req);
@@ -177,27 +143,10 @@ export class RootService {
         return await this.serveMihomoProvider(clientIp, req, res, mainShortUuid);
     }
 
-    public async serveFallbackMihomoProvider(
-        clientIp: string,
-        req: Request,
-        res: Response,
-        mainShortUuid: string,
-    ): Promise<void> {
-        try {
-            const fallbackShortUuid = await this.getFallbackShortUuid(clientIp, mainShortUuid);
-
-            if (!fallbackShortUuid) {
-                res.status(404).send('Not Found');
-                return;
-            }
-
-            return await this.serveMihomoProvider(clientIp, req, res, fallbackShortUuid);
-        } catch (error) {
-            this.logger.error('Error in serveFallbackMihomoProvider', error);
-
-            res.socket?.destroy();
-            return;
-        }
+    // Подписка сторонних клиентов собирается только из их аккаунта. Провайдер оставлен, потому что
+    // на него ссылаются mihomo-шаблоны; для клиента пустой провайдер — просто ноль прокси.
+    public async serveFallbackMihomoProvider(res: Response): Promise<void> {
+        res.status(404).send('Not Found');
     }
 
     public async serveAggregatedHappConfig(
@@ -243,27 +192,7 @@ export class RootService {
             tier: 'MAIN',
             whitelistSuffix: this.happXrayWhitelistSuffix,
         });
-        const fallbackLookupResult = await this.getFallbackLookupResult(clientIp, mainShortUuid);
-        let fallbackGroups: HappResolvedGroup[] = [];
-
-        if (fallbackLookupResult.fallbackShortUuid) {
-            const fallbackResponse = await this.axiosService.getSubscription(
-                clientIp,
-                fallbackLookupResult.fallbackShortUuid,
-                req.headers,
-                true,
-                XRAY_JSON_CLIENT_TYPE,
-            );
-
-            if (fallbackResponse) {
-                fallbackGroups = parseHappXrayCarrier(fallbackResponse.response, {
-                    tier: 'WL',
-                    whitelistSuffix: this.happXrayWhitelistSuffix,
-                });
-            }
-        }
-
-        const configs = buildResolvedHappXrayConfigs([...mainGroups, ...fallbackGroups], {
+        const configs = buildResolvedHappXrayConfigs(mainGroups, {
             burstObservatoryPingConfig: this.happXrayBurstObservatoryPingConfig,
             hysteriaSalamanderPassword: this.happXrayHysteriaSalamanderPassword,
             whitelistSuffix: this.happXrayWhitelistSuffix,
@@ -295,61 +224,12 @@ export class RootService {
                 return;
             }
 
-            const fallbackLookupResult = await this.getFallbackLookupResult(
-                clientIp,
-                mainShortUuid,
-            );
-
-            if (!fallbackLookupResult.isMainFound) {
-                this.logger.warn(
-                    `Main Happ config exists, but Remnawave user lookup failed for ${mainShortUuid}; returning main config only.`,
-                );
-                this.sendHappPayload(res, mainResp.headers, mainResp.response);
-                return;
-            }
-
-            if (!fallbackLookupResult.fallbackShortUuid) {
-                this.logger.debug(
-                    `No fallbackShortUuid for ${mainShortUuid}; returning main Happ config without merge.`,
-                );
-                this.sendHappPayload(res, mainResp.headers, mainResp.response);
-                return;
-            }
-
-            const fallbackResp = await this.axiosService.getSubscription(
-                clientIp,
-                fallbackLookupResult.fallbackShortUuid,
-                req.headers,
-                false,
-                undefined,
-            );
-
-            if (!fallbackResp) {
-                this.logger.warn(
-                    `Fallback Happ subscription fetch failed for ${fallbackLookupResult.fallbackShortUuid}; returning main config only.`,
-                );
-                this.sendHappPayload(res, mainResp.headers, mainResp.response);
-                return;
-            }
-
-            const merged = this.mergeHappSubscriptionPayloads(
-                mainResp.response,
-                fallbackResp.response,
-            );
-            this.sendHappPayload(res, mainResp.headers, merged);
+            this.sendHappPayload(res, mainResp.headers, mainResp.response);
         } catch (error) {
             this.logger.error('Error in serveAggregatedHappConfig', error);
             res.socket?.destroy();
             return;
         }
-    }
-
-    private mergeHappSubscriptionPayloads(mainPayload: unknown, fallbackPayload: unknown): string {
-        const mainLines = this.decodeHappSubscriptionPayloadLines(mainPayload);
-        const fallbackLines = this.decodeHappSubscriptionPayloadLines(fallbackPayload);
-
-        const merged = [...mainLines, ...fallbackLines].join('\n');
-        return Buffer.from(merged, 'utf-8').toString('base64');
     }
 
     private sendHappPayload(
@@ -515,7 +395,7 @@ export class RootService {
                 MIHOMO_CLIENT_TYPE,
             );
 
-            this.logger.log(`Fallback short UUID: ${shortUuid}`);
+            this.logger.log(`Provider short UUID: ${shortUuid}`);
             if (!subscriptionDataResponse) {
                 res.status(404).send('Not Found');
                 return;
@@ -529,108 +409,6 @@ export class RootService {
             res.socket?.destroy();
             return;
         }
-    }
-
-    private async getFallbackShortUuid(
-        clientIp: string,
-        mainShortUuid: string,
-    ): Promise<string | null> {
-        const fallbackLookupResult = await this.getFallbackLookupResult(clientIp, mainShortUuid);
-
-        return fallbackLookupResult.fallbackShortUuid;
-    }
-
-    private async getFallbackLookupResult(
-        clientIp: string,
-        mainShortUuid: string,
-    ): Promise<FallbackLookupResult> {
-        const mainUserResponse = await this.axiosService.getUserByShortUuid(
-            clientIp,
-            mainShortUuid,
-        );
-
-        if (!mainUserResponse.isOk || !mainUserResponse.response) {
-            this.logger.warn('Main Remnawave user lookup failed.');
-            return {
-                isMainFound: false,
-                fallbackShortUuid: null,
-            };
-        }
-
-        const fallbackShortUuid = this.parseFallbackShortUuid(
-            mainUserResponse.response.description,
-        );
-
-        if (!fallbackShortUuid) {
-            return {
-                isMainFound: true,
-                fallbackShortUuid: null,
-            };
-        }
-
-        const fallbackUserResponse = await this.axiosService.getUserByShortUuid(
-            clientIp,
-            fallbackShortUuid,
-        );
-
-        if (!fallbackUserResponse.isOk || !fallbackUserResponse.response) {
-            this.logger.warn('Fallback Remnawave user lookup failed.');
-            return {
-                isMainFound: true,
-                fallbackShortUuid: null,
-            };
-        }
-
-        if (fallbackUserResponse.response.status !== 'ACTIVE') {
-            this.logger.debug('Fallback Remnawave user is not active; excluding it from merge.');
-            return {
-                isMainFound: true,
-                fallbackShortUuid: null,
-            };
-        }
-
-        return {
-            isMainFound: true,
-            fallbackShortUuid,
-        };
-    }
-
-    private parseFallbackShortUuid(description: string | null): string | null {
-        if (!description) {
-            this.logger.debug('Main Remnawave user has empty description.');
-            return null;
-        }
-
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(description);
-        } catch {
-            this.logger.warn('Main Remnawave user has invalid description JSON.');
-            return null;
-        }
-
-        if (!this.isMainMetadataWithFallback(parsed)) {
-            this.logger.debug('Main Remnawave user description has no fallbackShortUuid.');
-            return null;
-        }
-
-        return parsed.fallbackShortUuid;
-    }
-
-    private isMainMetadataWithFallback(
-        value: unknown,
-    ): value is { fallbackShortUuid: string } & RemnawaveDescriptionMetadata {
-        if (typeof value !== 'object' || value === null) {
-            return false;
-        }
-
-        const metadata = value as Partial<RemnawaveDescriptionMetadata>;
-
-        return (
-            metadata.role === 'main' &&
-            typeof metadata.fallbackShortUuid === 'string' &&
-            metadata.fallbackShortUuid.length > 0
-        );
     }
 
     private buildAggregatedMihomoConfig(
@@ -657,7 +435,8 @@ export class RootService {
         // any group-level filters are defined in the Remnawave mihomo template
         // (mihomo_subscription.yml.j2). Server only adds the two HTTP
         // providers so groups in the template can resolve `use: [main-provider,
-        // fallback-provider]` references.
+        // fallback-provider]` references. The fallback provider is intentionally empty:
+        // third-party clients are served from their own account only.
         mihomoConfig['proxy-providers'] = {
             ...(this.isPlainObject(mihomoConfig['proxy-providers'])
                 ? mihomoConfig['proxy-providers']
