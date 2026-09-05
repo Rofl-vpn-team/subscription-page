@@ -388,6 +388,15 @@ test('serveAggregatedMihomoConfig carries Happ HWID into provider headers', asyn
     assert.match(res.body as string, /x-hwid:\n\s+- happ-device-id/);
 });
 
+test('serveFallbackMihomoProvider stays empty and never touches the panel', async () => {
+    const { axios, res, service } = createService({ HAPP_XRAY_GROUPED_CONFIG_ENABLED: true });
+
+    await service.serveFallbackMihomoProvider(res as never);
+
+    assert.equal(res.statusCode, 404);
+    assert.deepEqual(axios.subscriptionCalls, []);
+});
+
 test('configSchema parses Happ Xray defaults and string values', () => {
     const defaults = configSchema.parse({
         INTERNAL_JWT_SECRET: 'secret',
