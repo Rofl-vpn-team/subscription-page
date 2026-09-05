@@ -57,5 +57,9 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
+          # Yandex Container Registry rejects BuildKit 0.32 OCI attestations.
+          # Export a Docker schema v2 manifest without provenance attestations.
+          provenance: false
+          outputs: type=image,oci-mediatypes=false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
