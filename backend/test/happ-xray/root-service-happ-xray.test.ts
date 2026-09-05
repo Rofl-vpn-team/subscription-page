@@ -74,7 +74,6 @@ test('serveAggregatedHappConfig never looks up or merges the second account', as
         axios.subscriptionCalls.map(({ shortUuid }) => shortUuid),
         ['main-short'],
     );
-    assert.equal(axios.userLookups, 0);
 });
 
 test('serveAggregatedHappConfig applies custom burst observatory ping config', async () => {
@@ -557,13 +556,8 @@ test('configSchema parses Happ Xray defaults and string values', () => {
 function createService(
     configOverrides: Record<string, unknown>,
     subscriptionOverrides: {
-        fallbackPayload?: string | null;
-        fallbackShortUuid?: string | null;
-        fallbackStatus?: 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'LIMITED';
-        fallbackXrayJsonPayload?: unknown | null;
         mainPayload?: string;
         mainMihomoPayload?: unknown;
-        mainUserFound?: boolean;
         mainXrayJsonPayload?: unknown | null;
     } = {},
 ) {
@@ -585,28 +579,17 @@ function createService(
         SUBSCRIPTION_PUBLIC_BASE_URL: 'https://sub.example',
         ...configOverrides,
     });
+    // второй аккаунт в стабе есть всегда: тесты доказывают, что страница его не берёт
     const axios = new StubAxiosService({
-        fallbackPayload:
-            subscriptionOverrides.fallbackPayload === undefined
-                ? encodeLines([SECOND_HOST_LINK])
-                : subscriptionOverrides.fallbackPayload,
-        fallbackShortUuid:
-            subscriptionOverrides.fallbackShortUuid === undefined
-                ? 'fallback-short'
-                : subscriptionOverrides.fallbackShortUuid,
-        fallbackStatus: subscriptionOverrides.fallbackStatus ?? 'ACTIVE',
-        fallbackXrayJsonPayload:
-            subscriptionOverrides.fallbackXrayJsonPayload === undefined
-                ? createCarrier('⚡ Авто 2', 'fallback')
-                : subscriptionOverrides.fallbackXrayJsonPayload,
         mainPayload: subscriptionOverrides.mainPayload ?? encodeLines([MAIN_LINK]),
         mainMihomoPayload:
             subscriptionOverrides.mainMihomoPayload ?? 'proxies: []\nproxy-groups: []',
-        mainUserFound: subscriptionOverrides.mainUserFound ?? true,
         mainXrayJsonPayload:
             subscriptionOverrides.mainXrayJsonPayload === undefined
                 ? createCarrier('⚡ Авто 1', 'main')
                 : subscriptionOverrides.mainXrayJsonPayload,
+        secondAccountPayload: encodeLines([SECOND_HOST_LINK]),
+        secondAccountXrayJsonPayload: createCarrier('⚡ Авто 2', 'second'),
     });
     const logger = new CapturingLogger();
     const typedConfig = new TypedConfigService(config as never);
@@ -678,18 +661,14 @@ class StubConfigService {
 
 class StubAxiosService {
     public readonly subscriptionCalls: SubscriptionCall[] = [];
-    public userLookups = 0;
 
     public constructor(
         private readonly payloads: {
-            fallbackPayload: string | null;
-            fallbackShortUuid: string | null;
-            fallbackStatus: 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'LIMITED';
-            fallbackXrayJsonPayload: unknown | null;
             mainPayload: string;
             mainMihomoPayload: unknown;
-            mainUserFound: boolean;
             mainXrayJsonPayload: unknown | null;
+            secondAccountPayload: string;
+            secondAccountXrayJsonPayload: unknown;
         },
     ) {}
 
@@ -707,12 +686,12 @@ class StubAxiosService {
             clientType === 'v2ray-json'
                 ? isMain
                     ? this.payloads.mainXrayJsonPayload
-                    : this.payloads.fallbackXrayJsonPayload
+                    : this.payloads.secondAccountXrayJsonPayload
                 : clientType === 'mihomo'
                   ? this.payloads.mainMihomoPayload
                   : isMain
                     ? this.payloads.mainPayload
-                    : this.payloads.fallbackPayload;
+                    : this.payloads.secondAccountPayload;
 
         if (response === null) {
             return null;
@@ -721,35 +700,6 @@ class StubAxiosService {
         return {
             headers: { 'content-type': 'text/plain' },
             response,
-        };
-    }
-
-    public async getUserByShortUuid(_clientIp: string, shortUuid: string) {
-        this.userLookups += 1;
-        if (shortUuid === 'main-short') {
-            if (!this.payloads.mainUserFound) {
-                return { isOk: false };
-            }
-
-            return {
-                isOk: true,
-                response: {
-                    description: JSON.stringify({
-                        ...(this.payloads.fallbackShortUuid
-                            ? { fallbackShortUuid: this.payloads.fallbackShortUuid }
-                            : {}),
-                        role: 'main',
-                    }),
-                },
-            };
-        }
-
-        return {
-            isOk: true,
-            response: {
-                description: null,
-                status: this.payloads.fallbackStatus,
-            },
         };
     }
 }
